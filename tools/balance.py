@@ -55,8 +55,25 @@ def best_cell(game, role):
     return best
 
 
-def build_round(game, rng):
+def combine_round(game):
+    """At the unit cap, fuse adjacent pairs that have a recipe, so the freed slots can be built on."""
+    if len(game.units) < MAX_UNITS:
+        return
+    for unit in list(game.units):
+        if unit not in game.units:
+            continue
+        option = game.combine_option(unit)
+        if option is None or game.gold < game.combine_cost(unit, option[0]) + RESERVE:
+            continue
+        game.selected_unit = unit
+        game.combine()
+    game.selected_unit = None
+
+
+def build_round(game, rng, combine=True):
     """Spend gold on new units, upgrades and reinforcements. Called between rounds."""
+    if combine:
+        combine_round(game)
     plan_index = len(game.units)
     flyers = game.wave >= 5
     while len(game.units) < MAX_UNITS:
@@ -85,10 +102,10 @@ def build_round(game, rng):
     game.selected_unit = None
 
 
-def play(faction, difficulty, max_round, rng):
+def play(faction, difficulty, max_round, rng, combine=True):
     game = Game(faction, map_index=0, difficulty=difficulty)
     while game.status == "playing" and game.wave < max_round:
-        build_round(game, rng)
+        build_round(game, rng, combine)
         game.start_wave()
         steps = 0
         while game.wave_active and game.status == "playing" and steps < 200000:
@@ -127,13 +144,15 @@ def main():
     parser.add_argument("--difficulty", choices=tuple(DIFFICULTIES), default="Normal")
     parser.add_argument("--max-round", type=int, default=40, help="stop a game after this many rounds")
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--no-combine", action="store_true", help="the bot never combines units")
     args = parser.parse_args()
 
     factions = ("human", "zombie") if args.faction == "both" else (args.faction,)
     for faction in factions:
         rng = random.Random(args.seed)
-        games = [play(faction, args.difficulty, args.max_round, rng) for _ in range(args.games)]
-        report(f"{faction} vs {'zombie' if faction == 'human' else 'human'} on {args.difficulty}", games)
+        games = [play(faction, args.difficulty, args.max_round, rng, not args.no_combine) for _ in range(args.games)]
+        label = f"{faction} vs {'zombie' if faction == 'human' else 'human'} on {args.difficulty}"
+        report(label + ("" if args.no_combine else ", combining"), games)
 
 
 if __name__ == "__main__":

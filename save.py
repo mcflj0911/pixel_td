@@ -46,7 +46,7 @@ def run_to_data(game):
         "slot": game.slot,
         "units": [{"kind": u.kind, "x": u.x, "y": u.y, "level": u.level, "ultimate_index": u.ultimate_index,
                    "spent": u.spent, "damage": u.damage, "kills": u.kills,
-                   "reinforce": u.reinforce} for u in game.units],
+                   "reinforce": u.reinforce, "recipe": u.recipe} for u in game.units],
     }
 
 
@@ -64,7 +64,7 @@ def run_from_data(data):
     game.kills = data["kills"]
     game.leaks = Counter(data.get("leaks", {}))
     for item in data["units"]:
-        unit = Unit(game.faction, item["kind"], item["x"], item["y"])
+        unit = Unit(game.faction, item["kind"], item["x"], item["y"], recipe=item.get("recipe"))
         unit.level = item["level"]
         unit.spent = item["spent"]
         unit.damage = item.get("damage", 0.0)

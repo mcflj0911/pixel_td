@@ -203,6 +203,47 @@ ULTIMATES = {
     },
 }
 
+# --- COMBINATIONS ---
+# Combine two adjacent units (press C with one selected) and they become one unit of the recipe's type. Two units become
+# one, so combining frees a slot under the unit cap. Each recipe names the two roles it joins, the role the new unit
+# fights as (`base`), and its mods. The mods use the same keys as ULTIMATES, plus:
+#   blast: (radius, damage) of a splash blast set outright, for a unit that has no splash of its own
+# Only units at level 3 or below can combine, and a combined unit cannot combine again.
+COMBINATIONS = {
+    "human": {
+        "breacher": {"name": "Breacher", "roles": ("rapid", "splash"), "base": "rapid",
+                     "desc": "Rifle shots burst in a small blast", "mods": {"blast": (1.2, 12), "rate": 0.9}},
+        "sentinel": {"name": "Sentinel", "roles": ("rapid", "flak"), "base": "rapid",
+                     "desc": "Longer reach and harder hits", "mods": {"range": 1.5, "damage": 1.3}},
+        "overwatch": {"name": "Overwatch", "roles": ("sniper", "support"), "base": "sniper",
+                      "desc": "Aura reaches 3 tiles, shots pierce 2", "mods": {"aura": (3.0, 1.25), "pierce": 2}},
+        "siege_gun": {"name": "Siege Gun", "roles": ("sniper", "artillery"), "base": "artillery",
+                      "desc": "Reaches 2.5 tiles further, wider and harder blast",
+                      "mods": {"range": 2.5, "damage": 1.3, "blast": (2.4, 26)}},
+        "flame_medic": {"name": "Flame Medic", "roles": ("support", "flame"), "base": "flame",
+                        "desc": "Aura reaches 2 tiles, +30% fire rate, +20% damage",
+                        "mods": {"aura": (2.0, 1.3), "damage": 1.2}},
+        "napalm_crew": {"name": "Napalm Crew", "roles": ("splash", "flame"), "base": "splash",
+                        "desc": "Blasts leave fire behind for 3 s", "mods": {"burn": (8, 3.0, 1.2), "rate": 1.1}},
+    },
+    "zombie": {
+        "gutbuster": {"name": "Gutbuster", "roles": ("rapid", "splash"), "base": "rapid",
+                      "desc": "Spit bursts in a small blast", "mods": {"blast": (1.2, 12), "rate": 0.9}},
+        "rot_sentinel": {"name": "Rot Sentinel", "roles": ("rapid", "flak"), "base": "rapid",
+                         "desc": "Longer reach and harder hits", "mods": {"range": 1.5, "damage": 1.3}},
+        "death_shroud": {"name": "Death Shroud", "roles": ("sniper", "support"), "base": "sniper",
+                         "desc": "Aura reaches 3 tiles, shots pierce 2", "mods": {"aura": (3.0, 1.25), "pierce": 2}},
+        "bloat_siege": {"name": "Bloat Siege", "roles": ("sniper", "artillery"), "base": "artillery",
+                        "desc": "Reaches 2.5 tiles further, wider and harder blast",
+                        "mods": {"range": 2.5, "damage": 1.3, "blast": (2.4, 26)}},
+        "bile_shaman": {"name": "Bile Shaman", "roles": ("support", "flame"), "base": "flame",
+                        "desc": "Aura reaches 2 tiles, +30% fire rate, +20% damage",
+                        "mods": {"aura": (2.0, 1.3), "damage": 1.2}},
+        "toxic_crew": {"name": "Toxic Crew", "roles": ("splash", "flame"), "base": "splash",
+                       "desc": "Blasts leave poison behind for 3 s", "mods": {"burn": (8, 3.0, 1.2), "rate": 1.1}},
+    },
+}
+
 # Colours of projectiles, and of the puff left where one lands
 SHOT_COLOURS = {
     "human": {"rapid": (255, 226, 120), "sniper": (200, 240, 255), "splash": (255, 140, 60),

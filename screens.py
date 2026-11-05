@@ -97,6 +97,7 @@ def draw_help(screen, fonts):
         ("Switch", "At level 4, A or B (or the SWITCH button) changes ultimate between rounds, for half a unit price"),
         ("Reinforce", "G on an ultimate unit: +15% damage, up to 5 times, costs more each round"),
         ("Sell", "X twice (within 3 seconds) to confirm.  Refunds 60% of what you spent"),
+        ("Combine", "C fuses the selected unit with an adjacent unit it has a recipe for. Frees a slot"),
         ("Undo", "Ctrl+Z takes back the last build or sale, between rounds only"),
         ("Pickups", "Gold, rage and freeze drop on the route during a round. Click the tile to collect"),
         ("Rounds", "SPACE starts now.  Otherwise they auto-start after 10 seconds"),
@@ -107,10 +108,10 @@ def draw_help(screen, fonts):
         ("Quit", "Esc asks first"),
     ]
     for i, (key, text) in enumerate(lines):
-        y = 150 + i * 30
+        y = 150 + i * 28
         draw_text(screen, fonts["small"], key, (cx - 300, y), ACCENT)
         draw_text(screen, fonts["small"], text, (cx - 200, y), WHITE)
-    draw_text(screen, fonts["small"], "F1 or Esc to close", (cx, 150 + len(lines) * 30 + 20), GREY, anchor="center")
+    draw_text(screen, fonts["small"], "F1 or Esc to close", (cx, 150 + len(lines) * 28 + 16), GREY, anchor="center")
 
 
 def draw_quit_prompt(screen, fonts):

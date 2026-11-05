@@ -10,7 +10,8 @@ class BuildHistory:
         self._entries = []  # Placements and sales this build phase, newest last
 
     def record(self, entry):
-        """Remember a ("place", unit) or ("sell", unit, index) entry. Only the last UNDO_STEPS are kept."""
+        """Remember a ("place", unit), ("sell", unit, index) or ("combine", unit, partner, fused, index, partner_index)
+        entry. Only the last UNDO_STEPS are kept."""
         self._entries.append(entry)
         del self._entries[:-UNDO_STEPS]
 
@@ -37,6 +38,21 @@ class BuildHistory:
                 refund = unit.spent
                 game.gold += refund
                 game.message = f"Undid placement, refunded {refund}"
+                return True
+            if entry[0] == "combine":
+                _, unit, partner, fused, index, partner_index = entry
+                if fused not in game.units:
+                    continue  # Already sold: look at the one before it
+                # The refund is what was put into the result after the two units: the fee, and any upgrades since
+                refund = fused.spent - unit.spent - partner.spent
+                game.units.remove(fused)
+                game.all_units.remove(fused)
+                if game.selected_unit is fused:
+                    game.selected_unit = None
+                for position, original in sorted(((index, unit), (partner_index, partner))):
+                    game.units.insert(min(position, len(game.units)), original)
+                game.gold += refund
+                game.message = f"Combine undone, refunded {refund}"
                 return True
             _, unit, index = entry
             refund = game.sell_refund(unit)

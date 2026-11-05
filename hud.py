@@ -10,7 +10,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_COLS, MAP_ROWS, UNIT_TYPES,
 from draw_kit import (HUD_EDGE, ACCENT, WHITE, GREY, RED, GREEN, DIM, BUTTON, draw_text, draw_panel, dim_colour,
                       shade)
 from sprites import unit_sprite
-from ui import ROLE_RECTS, PANEL, UPGRADE_RECT, ULT_RECTS, SELL_RECT
+from ui import ROLE_RECTS, PANEL, UPGRADE_RECT, ULT_RECTS, SELL_RECT, COMBINE_RECT
 from units import group_multiplier, squad_multiplier
 
 MINI_POS = (16, 16)
@@ -151,7 +151,7 @@ def _draw_hint(screen, game, fonts):
     if game.message:
         text, colour = game.message, ACCENT
     elif game.selected_unit is not None:
-        text, colour = "U upgrade    A / B ultimate at level 3    X sell (twice)    Right-click deselect", GREY
+        text, colour = "U upgrade    A / B ultimate at level 3    C combine    X sell (twice)    Right-click deselect", GREY
     elif game.wave_active:
         text, colour = "Hold the route. Click a unit to upgrade it", GREY
     else:
@@ -178,13 +178,13 @@ def _draw_unit_panel(screen, game, fonts):
     _draw_ultimate_switch(screen, game, unit, fonts)
     _draw_sell_button(screen, game, unit, fonts)
     _draw_upgrade_or_ultimate(screen, game, unit, fonts)
+    _draw_combine(screen, game, unit, fonts)
 
 
 def _draw_unit_header(screen, unit, fonts):
     """Name, level pips, and the combo group and squad bonuses."""
     draw_text(screen, fonts["tiny"], "UNIT", (PANEL.x + 14, PANEL.y + 10), GREY)
-    title = UNIT_TYPES[unit.faction][unit.kind]["name"] if unit.ultimate is None else unit.ultimate["name"]
-    draw_text(screen, fonts["mid"], title, (PANEL.x + 14, PANEL.y + 26))
+    draw_text(screen, fonts["mid"], unit.display_name, (PANEL.x + 14, PANEL.y + 26))
 
     for i in range(4):  # Level pips
         pip = pygame.Rect(PANEL.x + 14 + i * 36, PANEL.y + 62, 30, 8)
@@ -223,6 +223,8 @@ def _draw_unit_stats(screen, unit, fonts):
 
     if unit.level == 4:
         draw_text(screen, fonts["tiny"], unit.ultimate["desc"], (PANEL.x + 14, PANEL.y + 200), ACCENT)
+    elif unit.recipe_info:
+        draw_text(screen, fonts["tiny"], unit.recipe_info["desc"], (PANEL.x + 14, PANEL.y + 200), ACCENT)
 
 
 def _draw_ultimate_switch(screen, game, unit, fonts):
@@ -255,6 +257,28 @@ def _draw_sell_button(screen, game, unit, fonts):
     if armed:
         left = max(0.0, min(1.0, game.sell_time_left / SELL_CONFIRM_SECONDS))
         pygame.draw.rect(screen, (255, 120, 110), (SELL_RECT.x, SELL_RECT.bottom + 3, SELL_RECT.w * left, 3))
+
+
+def _draw_combine(screen, game, unit, fonts):
+    """The combine button. It names the unit the combination makes, and the price, when a partner is next to it."""
+    if unit.level > 3:
+        return
+    if unit.recipe is not None:
+        draw_panel(screen, COMBINE_RECT, fill=BUTTON, slant=8)
+        draw_text(screen, fonts["tiny"], "COMBINED: cannot combine again", COMBINE_RECT.center, anchor="center")
+        return
+    option = game.combine_option(unit)
+    if option is None:
+        draw_panel(screen, COMBINE_RECT, fill=BUTTON, slant=8)
+        draw_text(screen, fonts["tiny"], "COMBINE [C]: needs a unit next to it", COMBINE_RECT.center, anchor="center")
+        return
+    partner, _, recipe = option
+    cost = game.combine_cost(unit, partner)
+    affordable = game.gold >= cost
+    draw_panel(screen, COMBINE_RECT, fill=(40, 70, 110) if affordable else BUTTON, slant=8)
+    draw_text(screen, fonts["small"], f"COMBINE [C]  {recipe['name']}",
+              (COMBINE_RECT.x + 12, COMBINE_RECT.centery), anchor="midleft")
+    draw_text(screen, fonts["small"], f"$ {cost}", (COMBINE_RECT.right - 12, COMBINE_RECT.centery), anchor="midright")
 
 
 def _draw_upgrade_or_ultimate(screen, game, unit, fonts):

@@ -2,6 +2,7 @@ import random
 from collections import Counter
 
 from config import (START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_EVERY, UNIT_TYPES, ULTIMATES,
+                    COMBINE_COST,
                     UPGRADE_COST, OPPONENT, SELL_REFUND, MAX_UNITS, SELL_CONFIRM_SECONDS, DIFFICULTIES,
                     ENEMY_TYPES, AUTO_START_SECONDS, SPAWN_RUSH, COMBO_RADIUS, REINFORCE_MAX, REINFORCE_COST, REINFORCE_GROWTH,
                     RESPEC_COST, PICKUP_EVERY, PICKUP_GOLD, RAGE_SECONDS, RAGE_FIRE, FREEZE_SECONDS,
@@ -13,7 +14,7 @@ from projectiles import Puff
 from save import read_save, run_from_data, run_to_data, write_save
 import story
 from pickups import KINDS, Pickup
-from units import Unit, group_multiplier
+from units import Unit, group_multiplier, recipe_for
 from waves import build_wave, hp_multiplier, speed_multiplier, preview, BOSS
 from world import make_map
 
@@ -112,7 +113,7 @@ class Game:
         if not self.map.is_buildable(col, row) or self.unit_at(col, row) is not None:
             return "Can't build there"
         if len(self.units) >= MAX_UNITS:
-            return f"Unit cap: {MAX_UNITS} units. Sell one first"
+            return f"Unit cap: {MAX_UNITS} units. Sell or combine one first"
         cost = UNIT_TYPES[self.faction][role]["cost"]
         if cost > self.gold:
             return f"Need {cost} gold"
@@ -255,6 +256,61 @@ class Game:
         name = UNIT_TYPES[unit.faction][unit.kind]["name"]
         self.message = f"Sold {name} for {refund} gold"
         self._log(f"{name} sold  +{refund}", NOTE)
+        return True
+
+    # --- COMBINING ---
+
+    NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))  # Edge-sharing cells
+
+    def combine_option(self, unit):
+        """The adjacent unit that `unit` can combine with, as (partner, recipe_id, recipe), or None.
+        Ultimates and already-combined units take no part. Neighbours are tried in NEIGHBOURS order."""
+        if unit is None or unit.level > 3 or unit.recipe is not None:
+            return None
+        col, row = int(unit.x), int(unit.y)
+        for dc, dr in self.NEIGHBOURS:
+            other = self.unit_at(col + dc, row + dr)
+            if other is None or other.level > 3 or other.recipe is not None:
+                continue
+            found = recipe_for(self.faction, unit.kind, other.kind)
+            if found is not None:
+                return (other,) + found
+        return None
+
+    def combine_cost(self, unit, partner):
+        """Gold to combine two units: a share of their base prices, scaled by the difficulty."""
+        return round((unit.cost + partner.cost) * COMBINE_COST * DIFFICULTIES[self.difficulty]["combine"])
+
+    def combine(self):
+        """Fuse the selected unit with the adjacent unit it has a recipe for. The result takes the first unit's
+        tile, and two units become one, so a slot is freed. Returns True when the units are combined."""
+        unit = self.selected_unit
+        if unit is None:
+            self.message = "Select a unit first"
+            return False
+        option = self.combine_option(unit)
+        if option is None:
+            self.message = "Put a unit it combines with next to it"
+            return False
+        partner, recipe_id, recipe = option
+        cost = self.combine_cost(unit, partner)
+        if cost > self.gold:
+            self.message = f"Need {cost} gold"
+            return False
+        self.gold -= cost
+        fused = Unit(self.faction, recipe["base"], unit.x, unit.y, recipe=recipe_id)
+        fused.level = max(unit.level, partner.level)  # Both are at most level 3, so the result is too
+        fused.spent = unit.spent + partner.spent + cost
+        first, second = self.units.index(unit), self.units.index(partner)
+        self.units.remove(unit)
+        self.units.remove(partner)
+        self.units.insert(min(first, second), fused)
+        self.all_units.append(fused)
+        self.selected_unit = fused
+        self.history.record(("combine", unit, partner, fused, first, second))
+        self.sound_events.append(("cash",))
+        self.message = f"{recipe['name']} formed  -{cost} gold"
+        self._log(f"{recipe['name']} combined  -{cost}", NOTE)
         return True
 
     # --- ROUNDS AND MAPS ---

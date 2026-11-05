@@ -25,6 +25,7 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 | A / B | Pick one of two ultimate forms at level 4. At level 4, A or B switches to the other form between rounds, for half the unit price |
 | G | Reinforce an ultimate unit |
 | X (twice) | Sell the selected unit |
+| C | Combine the selected unit with an adjacent unit it has a recipe for. The two become one unit and a slot is freed. The price rises on harder difficulties |
 | Space | Between rounds: start the next round now. During a round: toggle fast spawning (the enemies come out four times quicker) |
 | F | Toggle game speed |
 | P | Pause |

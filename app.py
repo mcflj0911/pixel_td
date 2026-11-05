@@ -45,6 +45,8 @@ def handle_action(game, action):
         game.choose_ultimate(action[1])
     elif kind == "sell":
         game.sell()
+    elif kind == "combine":
+        game.combine()
 
 
 def read_saves():
@@ -281,6 +283,8 @@ class App:
             game.choose_ultimate(1)
         elif key == pygame.K_x:
             game.sell()
+        elif key == pygame.K_c:
+            game.combine()
         elif key == pygame.K_r and game.status != "playing":
             self.game = None
             self.setup.update(self.title_state())

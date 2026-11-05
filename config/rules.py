@@ -17,7 +17,7 @@ WAVE_HP_GROWTH = 0.35  # Set from tools/balance.py. The bot's losses come from t
 WAVE_SPEED_GROWTH = 0.03
 
 # --- LIMITS, FLYING AND BOSSES ---
-MAX_UNITS = 24  # Hard cap on placed units
+MAX_UNITS = 24  # Hard cap on placed units. Combining two units into one frees a slot
 AIR_ROLES = ("rapid", "sniper", "flak")  # Only these can shoot flying enemies
 FLY_HEIGHT = 1.6  # How high flying enemies hover, in tiles
 BOSS_EVERY = 5  # A boss joins the end of every this many rounds
@@ -29,11 +29,12 @@ REINFORCE_BONUS = 0.15  # Each reinforcement adds this much damage to an ultimat
 REINFORCE_MAX = 5  # Reinforcements per unit
 REINFORCE_COST = 0.5  # Fraction of the unit's base cost, before the round scaling below
 REINFORCE_GROWTH = 0.08  # Extra cost per round, so reinforcing late in the game is a real choice
-DIFFICULTIES = {  # Enemy hp and kill reward multipliers
-    "Easy": {"hp": 0.8, "reward": 1.2},
-    "Normal": {"hp": 1.0, "reward": 1.0},
-    "Hard": {"hp": 1.25, "reward": 0.9},
+DIFFICULTIES = {  # Enemy hp, kill reward and combine price multipliers
+    "Easy": {"hp": 0.8, "reward": 1.2, "combine": 0.7},
+    "Normal": {"hp": 1.0, "reward": 1.0, "combine": 1.0},
+    "Hard": {"hp": 1.25, "reward": 0.9, "combine": 1.5},
 }
+COMBINE_COST = 0.5  # Combining costs this share of the two units' base prices, before the difficulty multiplier
 WAVE_BONUS_GROWTH = 3  # Extra clear bonus per round, so late rounds pay for the bigger armies
 AUTO_START_SECONDS = 10.0  # Countdown before the next round starts by itself. SPACE starts it sooner
 COMBO_RADIUS = 2.5  # Units of the same type this close together form a combo group
