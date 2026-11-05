@@ -14,7 +14,8 @@ FOG_START, FOG_END = 14, 30  # Distance from the camera where the fog starts and
 # --- MAP ---
 MAP_COLS, MAP_ROWS = 16, 12
 # The first map is fixed. Every later map is generated from its index (see world.py)
-PATH = [(0, 2), (12, 2), (12, 6), (3, 6), (3, 9), (15, 9)]
+# The first map is a full-width serpentine (see world.serpentine): five lanes, joined at alternating ends
+PATH = [(0, 1), (15, 1), (15, 3), (0, 3), (0, 6), (15, 6), (15, 9), (0, 9), (0, 11), (15, 11)]
 # Floor colours: grass, grass alternate, path, path alternate, outside the map
 TILE_COLOURS = [(78, 128, 66), (70, 118, 60), (160, 134, 90), (148, 122, 80), (52, 60, 48)]
 

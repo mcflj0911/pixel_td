@@ -45,8 +45,8 @@ class EventTests(unittest.TestCase):
     def test_firing_units_emit_fire_events(self):
         game = Game("human")
         game.gold = 500
-        game.place(5, 1, "rapid")
-        game.place(6, 1, "flame")
+        game.place(5, 0, "rapid")  # Row 0 runs beside the first lane of the classic map
+        game.place(6, 0, "flame")
         game.start_wave()
         for _ in range(200):
             game.update(0.05)

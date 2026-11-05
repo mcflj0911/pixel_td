@@ -1,13 +1,11 @@
-from unittest import mock
 import unittest
 
 from camera import Camera
-from config import (PATH, START_GOLD, START_LIVES, WAVE_BONUS, MAP_EVERY, MAP_COLS, OPPONENT, UNIT_TYPES,
+from config import (PATH, START_GOLD, START_LIVES, WAVE_BONUS, MAP_EVERY, MAP_COLS, MAP_ROWS, MAX_UNITS, OPPONENT, UNIT_TYPES,
                     ENEMY_TYPES, UPGRADE_COST, ULTIMATES, ROLES, SELL_REFUND)
 from enemies import Enemy
 from game import Game
 from waves import build_wave, hp_multiplier, preview
-import world
 from world import make_map, generate_path, in_bounds
 
 
@@ -62,12 +60,16 @@ class WorldTests(unittest.TestCase):
                         self.assertNotIn((c + dc, r + dr), m.cells, f"map {index} doodad touches route")
 
     def test_doodads_block_building(self):
-        m = make_map(0)
-        with mock.patch.object(world, "DOODAD_DENSITY", 0.2):
-            m = make_map(0)
-        self.assertTrue(m.doodads, "map 0 should have doodads")
-        for x, y, _ in m.doodads:
-            self.assertFalse(m.is_buildable(int(x), int(y)))
+        for index in range(0, 11):
+            m = make_map(index)
+            for x, y, _ in m.doodads:
+                self.assertFalse(m.is_buildable(int(x), int(y)))
+
+    def test_every_map_leaves_room_for_the_full_unit_cap(self):
+        for index in range(0, 21):
+            m = make_map(index)
+            room = sum(m.is_buildable(c, r) for c in range(MAP_COLS) for r in range(MAP_ROWS))
+            self.assertGreaterEqual(room, MAX_UNITS, f"map {index} has only {room} buildable tiles")
 
     def test_markers_sit_at_the_route_ends(self):
         for index in (0, 3):
@@ -82,7 +84,7 @@ class WorldTests(unittest.TestCase):
 
     def test_cannot_build_on_path_or_off_map(self):
         m = make_map(0)
-        self.assertFalse(m.is_buildable(0, 2))  # On the route
+        self.assertFalse(m.is_buildable(*PATH[0]))  # On the route
         self.assertFalse(m.is_buildable(-1, 0))
         self.assertFalse(m.is_buildable(16, 0))
         self.assertTrue(m.is_buildable(5, 0))
@@ -281,8 +283,8 @@ class RulesTests(unittest.TestCase):
     def test_towers_kill_and_are_paid(self):
         game = Game("human")
         game.gold = 1000
-        for col in (5, 6, 7):
-            self.assertIsNotNone(game.place(col, 1, "rapid"))
+        for col in (5, 6, 7):  # Row 0 runs beside the first lane of the classic map
+            self.assertIsNotNone(game.place(col, 0, "rapid"))
         game.start_wave()
         rewards, seen = [], 0
         for _ in range(20000):  # Record what each kill paid, since combos change the reward

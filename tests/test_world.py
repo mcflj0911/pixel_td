@@ -14,15 +14,16 @@ class DoodadTests(unittest.TestCase):
             self.assertIsNotNone(doodad_sprite(kind))
 
     def test_doodads_block_building_and_are_kept_off_the_route(self):
+        # Serpentine maps leave no ground away from the route, so test the placement on ground that has room
         with mock.patch.object(world, "DOODAD_DENSITY", 0.3):
-            game_map = world.make_map(2)
-        self.assertTrue(game_map.doodads)
-        kinds = {kind for _, _, kind in game_map.doodads}
+            doodads = world._place_doodads(2, {(0, 0), (1, 0)})
+        self.assertTrue(doodads)
+        kinds = {kind for _, _, kind in doodads}
         self.assertGreater(len(kinds), 3)
-        for x, y, _ in game_map.doodads:
+        for x, y, _ in doodads:
             cell = (int(x), int(y))
-            self.assertNotIn(cell, game_map.cells)
-            self.assertFalse(game_map.is_buildable(*cell))
+            self.assertNotIn(cell, {(0, 0), (1, 0)})
+            self.assertNotIn(cell, {(c, r) for c in (0, 1, 2) for r in (0, 1)})
 
 
 if __name__ == "__main__":

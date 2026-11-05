@@ -25,57 +25,32 @@ def cells_on_path(path):
     return cells
 
 
-def _neighbours(col, row):
-    return [(col + 1, row), (col - 1, row), (col, row + 1), (col, row - 1)]
+# A route is a serpentine: LANES straight runs across the whole map, joined at alternating ends. An odd number of lanes
+# means the route starts at the left edge and ends at the right one, where the start and end markers sit.
+LANES = 5
 
 
-def _run_is_clear(cells, start, run):
-    """A new run of route cells is fine if it stays on the map, avoids the route, and does not touch it
-    anywhere except at its start. Touching would make the route look like one blob."""
-    for cell in run:
-        if not in_bounds(*cell) or cell in cells:
-            return False
-        for n in _neighbours(*cell):
-            if n in cells and n != start:
-                return False
-    return True
+def serpentine(rows):
+    """Waypoints of a route that crosses the map along each row in `rows`, joined at alternating ends."""
+    waypoints = []
+    for k, row in enumerate(rows):
+        left, right = 0, MAP_COLS - 1
+        if k % 2:
+            left, right = right, left
+        waypoints += [(left, row), (right, row)]
+    return waypoints
 
 
-def _try_random_path(rng):
-    """One attempt at a route: left edge to right edge, alternating straight runs. None if it got stuck."""
-    y = rng.randrange(1, MAP_ROWS - 1)
-    path = [(0, y)]
-    cells = {(0, y)}
-    x = 0
-    horizontal = True
-    for _ in range(40):
-        if horizontal:
-            nx = min(MAP_COLS - 1, x + rng.randint(3, 7))
-            run = [(i, y) for i in range(x + 1, nx + 1)]
-        else:
-            ny = min(MAP_ROWS - 1, max(0, y + rng.randint(2, 4) * rng.choice((-1, 1))))
-            if ny == y:
-                return None
-            step = 1 if ny > y else -1
-            run = [(x, j) for j in range(y + step, ny + step, step)]
-        if not run or not _run_is_clear(cells, (x, y), run):
-            return None
-        cells.update(run)
-        x, y = run[-1]
-        path.append((x, y))
-        if horizontal and x == MAP_COLS - 1:
-            return path
-        horizontal = not horizontal
-    return None
-
-
-def generate_path(seed, attempts=300):
+def generate_path(seed):
+    """A serpentine route for this seed. The lanes are 2 or 3 rows apart at random, so the maps differ, but every
+    lane is full width, so the route covers about half the map: the tiles between two lanes are the building ground."""
     rng = random.Random(seed)
-    for _ in range(attempts):
-        path = _try_random_path(rng)
-        if path:
-            return path
-    return list(PATH)  # Should not happen, but always have a route
+    while True:
+        rows = [rng.choice((0, 1))]
+        for _ in range(LANES - 1):
+            rows.append(rows[-1] + rng.choice((2, 3)))
+        if rows[-1] <= MAP_ROWS - 1:
+            return serpentine(rows)
 
 
 def _place_doodads(index, route_cells):
