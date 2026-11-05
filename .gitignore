@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+savegame_*.json
+settings.json
+records.json
+autosave.json
+*.tmp
+.idea/
+.vscode/
