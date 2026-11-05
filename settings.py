@@ -3,9 +3,9 @@ the best round reached for each faction and difficulty.
 
 Both are small JSON files next to the game. A missing or damaged file gives the defaults, so the game always starts.
 """
-import json
 import os
 
+from atomic_json import read_json, write_json_atomic
 from config import DIFFICULTIES
 from save import SAVE_DIR
 
@@ -26,34 +26,14 @@ DEFAULTS = {
 }
 
 
-def _read_json(path):
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return {}
+def _read_dict(path):
+    data = read_json(path)
     return data if isinstance(data, dict) else {}
-
-
-def _write_json(path, data):
-    """Write atomically, like the save files. Returns False if the disk refused."""
-    tmp = path + ".tmp"
-    try:
-        with open(tmp, "w") as f:
-            json.dump(data, f, indent=1)
-        os.replace(tmp, path)
-    except OSError:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        return False
-    return True
 
 
 def load_settings(path=SETTINGS_FILE):
     """The saved settings, with anything missing or of the wrong type filled in from DEFAULTS."""
-    data = _read_json(path)
+    data = _read_dict(path)
     settings = dict(DEFAULTS)
     for key, default in DEFAULTS.items():
         value = data.get(key)
@@ -73,12 +53,13 @@ def load_settings(path=SETTINGS_FILE):
 
 
 def save_settings(settings, path=SETTINGS_FILE):
-    return _write_json(path, settings)
+    """Returns False if the file could not be written."""
+    return write_json_atomic(path, settings)
 
 
 def load_records(path=RECORDS_FILE):
     """Best rounds, as {"human:Normal": 12, ...}."""
-    data = _read_json(path)
+    data = _read_dict(path)
     return {key: value for key, value in data.items() if isinstance(value, int) and not isinstance(value, bool)}
 
 
@@ -96,4 +77,5 @@ def record_round(records, faction, difficulty, wave):
 
 
 def save_records(records, path=RECORDS_FILE):
-    return _write_json(path, records)
+    """Returns False if the file could not be written."""
+    return write_json_atomic(path, records)

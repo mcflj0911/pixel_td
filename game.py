@@ -6,10 +6,11 @@ from config import (START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_
                     ENEMY_TYPES, AUTO_START_SECONDS, SPAWN_RUSH, COMBO_RADIUS, REINFORCE_MAX, REINFORCE_COST, REINFORCE_GROWTH,
                     RESPEC_COST, PICKUP_EVERY, PICKUP_GOLD, RAGE_SECONDS, RAGE_FIRE, FREEZE_SECONDS,
                     FREEZE_FACTOR)
-from config import BOSS_EVERY, STORY_LOG_LINES, UNDO_STEPS
+from config import BOSS_EVERY, STORY_LOG_LINES
 from enemies import Enemy
+from history import BuildHistory
 from projectiles import Puff
-from save import SAVE_VERSION, read_save, write_save
+from save import read_save, run_from_data, run_to_data, write_save
 import story
 from pickups import KINDS, Pickup
 from units import Unit, group_multiplier
@@ -75,7 +76,7 @@ class Game:
         self.sound_events = []
         self._groan_timer = 0.0
         self._flap_timer = 0.0
-        self._history = []  # Placements and sales this build phase, newest last, for undo
+        self.history = BuildHistory()  # Placements and sales this build phase, for undo
         self.slot = 1  # Save slot this run writes to
         self._rng = random.Random()
         self.pickups = []  # Map pickups on the route, during a round
@@ -127,7 +128,7 @@ class Game:
         unit = Unit(self.faction, role, col + 0.5, row + 0.5)
         self.units.append(unit)
         self.all_units.append(unit)
-        self._record(("place", unit))
+        self.history.record(("place", unit))
         self.message = ""
         return unit
 
@@ -247,7 +248,7 @@ class Game:
         self._sell_timer = 0.0
         index = self.units.index(unit)
         self.units.remove(unit)
-        self._record(("sell", unit, index))
+        self.history.record(("sell", unit, index))
         self.selected_unit = None
         self.gold += refund
         self.sound_events.append(("cash",))
@@ -297,7 +298,7 @@ class Game:
         if new_map:
             self._new_map()
         self.wave = next_round
-        self._history = []  # Rounds lock in the build
+        self.history.clear()  # Rounds lock in the build
         self._queue = build_wave(self.enemy_faction, self.wave)
         self._wave_time = 0.0
         self.hp_mult = hp_multiplier(self.wave)
@@ -348,22 +349,44 @@ class Game:
             self.sound_events.append(("boss",))
 
     def update(self, dt):
+        """Advance the game by dt seconds of play. The steps run in this order, which the rules depend on."""
         self._tick_hud(dt)
         if self.status != "playing":
             return
         self._tick_pickups(dt)
+        self._tick_countdown(dt)
+        self._spawn_due(dt)
+        self._advance_enemies(dt)
+        self.zones = [zone for zone in self.zones if zone.update(dt, self.enemies)]
+        self._tick_ambience(dt)
+        self._apply_auras()
+        self._fire_and_hit(dt)
+        self._resolve_deaths()
 
+        if self.lives <= 0:
+            self.lives = 0
+            self.status = "lost"
+            self.wave_active = False
+            return
+        self._check_round_cleared()
+
+    def _tick_countdown(self, dt):
+        """Between rounds the next one starts itself when the countdown runs out."""
         if not self.wave_active:
             self.countdown -= dt
             if self.countdown <= 0:
                 self.start_wave()
 
+    def _spawn_due(self, dt):
+        """Release the queued enemies whose spawn time has come. Fast spawning runs the clock faster."""
         if self.wave_active:
             self._wave_time += dt * (SPAWN_RUSH if self.rushing else 1.0)
             while self._queue and self._queue[0][0] <= self._wave_time:
                 _, kind = self._queue.pop(0)
                 self._spawn(kind)
 
+    def _advance_enemies(self, dt):
+        """Move the enemies along the route. Any that reach the end cost lives and are taken out of play."""
         for enemy in self.enemies:
             if enemy.alive and enemy.advance(dt):
                 enemy.leaked = True
@@ -372,22 +395,21 @@ class Game:
                 self.leaks[enemy.spec["name"]] += 1
                 self._log(f"! {enemy.spec['name']} breached  -{enemy.spec['leak']} life", BAD)
 
-        self.zones = [zone for zone in self.zones if zone.update(dt, self.enemies)]
-
-        # Ground zombies groan every second or so while any of them are alive
+    def _tick_ambience(self, dt):
+        """Sound cues: zombies groan while any are alive, and flyers beat their wings while they are up."""
         self._groan_timer -= dt
         zombies = [e for e in self.enemies if e.alive and e.faction == "zombie" and not e.flying]
         if zombies and self._groan_timer <= 0:
             self.sound_events.append(("groan",))
             self._groan_timer = self._rng.uniform(0.8, 1.8)
 
-        # Flyers beat their wings while they are up
         self._flap_timer -= dt
         if self._flap_timer <= 0 and any(e.alive and e.flying for e in self.enemies):
             self.sound_events.append(("flap", self.enemy_faction))
             self._flap_timer = FLAP_INTERVAL
 
-        self._apply_auras()
+    def _fire_and_hit(self, dt):
+        """Units shoot, shots fly and hit, and puffs fade."""
         for unit in self.units:
             shots = unit.update(dt, self.enemies)
             if shots:
@@ -396,9 +418,10 @@ class Game:
         for projectile in self.projectiles:
             projectile.update(dt, self.enemies, self.zones, self.effects)
         self.projectiles = [p for p in self.projectiles if not p.done]
-
         self.effects = [puff for puff in self.effects if puff.update(dt)]
 
+    def _resolve_deaths(self):
+        """Pay out and count the enemies killed this step. Leakers were already paid for by their lives."""
         still_alive = []
         for enemy in self.enemies:
             if enemy.alive:
@@ -414,12 +437,9 @@ class Game:
                 self.effects.append(Puff(enemy.x, enemy.y, (230, 230, 210), size=3.0, life=0.4))
         self.enemies = still_alive
 
-        if self.lives <= 0:
-            self.lives = 0
-            self.status = "lost"
-            self.wave_active = False
-            return
-
+    def _check_round_cleared(self):
+        """A round is cleared once every enemy has spawned and been dealt with. Pays the bonus and starts the
+        countdown to the next round."""
         if self.wave_active and not self._queue and not self.enemies:
             self.wave_active = False
             self.rushing = False
@@ -501,7 +521,6 @@ class Game:
             self._log(f"FREEZE: ground enemies slowed for {FREEZE_SECONDS:.0f} s", NEUTRAL)
         self.sound_events.append(("cash",))
 
-
     def _tick_hud(self, dt):
         self.banner_life = max(0.0, self.banner_life - dt)
         self.hitmark = max(0.0, self.hitmark - dt)
@@ -541,25 +560,8 @@ class Game:
         if self.status != "playing" or self.wave_active:
             self.message = "Save between rounds"
             return False
-        ok, self.message = write_save(path, self._save_data())
+        ok, self.message = write_save(path, run_to_data(self))
         return ok
-
-    def _save_data(self):
-        return {
-            "version": SAVE_VERSION,
-            "faction": self.faction,
-            "difficulty": self.difficulty,
-            "map_index": self.map.index,
-            "wave": self.wave,
-            "gold": self.gold,
-            "lives": self.lives,
-            "kills": self.kills,
-            "leaks": dict(self.leaks),
-            "slot": self.slot,
-            "units": [{"kind": u.kind, "x": u.x, "y": u.y, "level": u.level, "ultimate_index": u.ultimate_index,
-                       "spent": u.spent, "damage": u.damage, "kills": u.kills,
-                       "reinforce": u.reinforce} for u in self.units],
-        }
 
     @staticmethod
     def load_slot(path):
@@ -569,7 +571,7 @@ class Game:
         if data is None:
             return None, reason
         try:
-            game = Game._from_save_data(data)
+            game = run_from_data(data)
         except (KeyError, TypeError, ValueError, IndexError):
             return None, "unreadable"
         game.message = "Game loaded"
@@ -581,28 +583,6 @@ class Game:
         return Game.load_slot(path)[0]
 
     @staticmethod
-    def _from_save_data(data):
-        game = Game(data["faction"], data["map_index"], data["difficulty"])
-        game.wave = data["wave"]
-        game.gold = data["gold"]
-        game.lives = data["lives"]
-        game.kills = data["kills"]
-        game.leaks = Counter(data.get("leaks", {}))
-        for item in data["units"]:
-            unit = Unit(game.faction, item["kind"], item["x"], item["y"])
-            unit.level = item["level"]
-            unit.spent = item["spent"]
-            unit.damage = item.get("damage", 0.0)
-            unit.kills = item.get("kills", 0)
-            unit.reinforce = item.get("reinforce", 0)
-            if unit.level == 4:
-                unit.ultimate_index = item["ultimate_index"]
-                unit.ultimate = ULTIMATES[unit.faction][unit.kind][unit.ultimate_index]
-            game.units.append(unit)
-            game.all_units.append(unit)
-        return game
-
-    @staticmethod
     def save_round(path):
         """The round a save slot holds, or None if the slot is empty, unreadable or from another version."""
         data, _ = read_save(path)
@@ -610,42 +590,9 @@ class Game:
 
     # --- UNDO AND REINFORCEMENT ---
 
-    def _record(self, entry):
-        """Remember a placement or sale so it can be undone. Only the last UNDO_STEPS are kept."""
-        self._history.append(entry)
-        del self._history[:-UNDO_STEPS]
-
     def undo(self):
-        """Take back the most recent placement or sale. Only between rounds."""
-        if self.wave_active:
-            self.message = "Can't undo during a round"
-            return False
-        while self._history:
-            entry = self._history.pop()
-            if entry[0] == "place":
-                unit = entry[1]
-                if unit not in self.units:
-                    continue  # Already sold or removed: look at the one before it
-                self.units.remove(unit)
-                self.all_units.remove(unit)
-                if self.selected_unit is unit:
-                    self.selected_unit = None
-                refund = unit.spent
-                self.gold += refund
-                self.message = f"Undid placement, refunded {refund}"
-                return True
-            _, unit, index = entry
-            refund = self.sell_refund(unit)
-            if self.gold < refund:
-                self._history.append(entry)  # Keep the sale, so it can be undone once there is gold
-                self.message = f"Need {refund} gold to undo the sale"
-                return False
-            self.gold -= refund
-            self.units.insert(min(index, len(self.units)), unit)
-            self.message = "Sale undone"
-            return True
-        self.message = "Nothing to undo"
-        return False
+        """Take back the most recent placement or sale. Only between rounds. See history.py."""
+        return self.history.undo(self)
 
     def reinforce_cost(self, unit):
         growth = 1 + REINFORCE_GROWTH * max(0, self.wave - 1)

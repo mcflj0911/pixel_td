@@ -65,10 +65,13 @@ python -m unittest discover -s tests -t .
 
 | File | What it holds |
 | --- | --- |
-| `main.py` | Window, event loop and title screen |
-| `game.py` | Game rules and state: rounds, gold, building, upgrades, undo, saving |
-| `save.py` | Save files on disk (atomic writes, reading and error reasons) |
-| `settings.py` | Remembered settings and best-round records (atomic writes, safe defaults) |
+| `main.py` | Starts the game |
+| `app.py` | The window, the screens (title, briefing, battle) and their keys and clicks, with one overlay at a time |
+| `game.py` | Game rules and state: rounds, gold, building, upgrades, the round update |
+| `history.py` | Undo for the build phase (placements and sales between rounds) |
+| `save.py` | Save files: converting a run to and from its saved form, reading and error reasons |
+| `atomic_json.py` | The atomic JSON read and write shared by the save, settings and records files |
+| `settings.py` | Remembered settings and best-round records (safe defaults) |
 | `display.py` | Fits the fixed-size game canvas into the window (fullscreen and resizing) |
 | `units.py`, `enemies.py`, `projectiles.py` | Defenders, enemies and shots |
 | `waves.py` | Round spawn schedules |

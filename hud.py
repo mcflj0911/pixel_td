@@ -172,10 +172,18 @@ def _stat_bar(screen, fonts, y, label, value_text, ratio):
 
 def _draw_unit_panel(screen, game, fonts):
     unit = game.selected_unit
-    spec = UNIT_TYPES[unit.faction][unit.kind]
     draw_panel(screen, PANEL, accent=True)
+    _draw_unit_header(screen, unit, fonts)
+    _draw_unit_stats(screen, unit, fonts)
+    _draw_ultimate_switch(screen, game, unit, fonts)
+    _draw_sell_button(screen, game, unit, fonts)
+    _draw_upgrade_or_ultimate(screen, game, unit, fonts)
+
+
+def _draw_unit_header(screen, unit, fonts):
+    """Name, level pips, and the combo group and squad bonuses."""
     draw_text(screen, fonts["tiny"], "UNIT", (PANEL.x + 14, PANEL.y + 10), GREY)
-    title = spec["name"] if unit.ultimate is None else unit.ultimate["name"]
+    title = UNIT_TYPES[unit.faction][unit.kind]["name"] if unit.ultimate is None else unit.ultimate["name"]
     draw_text(screen, fonts["mid"], title, (PANEL.x + 14, PANEL.y + 26))
 
     for i in range(4):  # Level pips
@@ -190,6 +198,9 @@ def _draw_unit_panel(screen, game, fonts):
         draw_text(screen, fonts["tiny"], "  ".join(parts),
                   (PANEL.right - 14, PANEL.y + 50), ACCENT, anchor="topright")
 
+
+def _draw_unit_stats(screen, unit, fonts):
+    """Damage dealt and kills, the three stat bars, the special effects and the ultimate's description."""
     draw_text(screen, fonts["tiny"], f"DEALT {unit.damage:.0f}   KILLS {unit.kills}",
               (PANEL.right - 14, PANEL.y + 80), GREY, anchor="topright")
     s = unit.stats
@@ -213,21 +224,29 @@ def _draw_unit_panel(screen, game, fonts):
     if unit.level == 4:
         draw_text(screen, fonts["tiny"], unit.ultimate["desc"], (PANEL.x + 14, PANEL.y + 200), ACCENT)
 
-    if unit.level == 4:
-        cost = game.reinforce_cost(unit)
-        maxed = unit.reinforce >= REINFORCE_MAX
-        affordable = game.gold >= cost and not maxed
-        label = (f"FULLY REINFORCED ({REINFORCE_MAX}/{REINFORCE_MAX})" if maxed else
-                 f"REINFORCE  [G]   $ {cost}   ({unit.reinforce}/{REINFORCE_MAX})")
-        draw_panel(screen, UPGRADE_RECT, fill=(36, 84, 46) if affordable else BUTTON, slant=8)
-        draw_text(screen, fonts["small"], label, UPGRADE_RECT.center, anchor="center")
-        other = 1 - unit.ultimate_index
-        switch = ULTIMATES[unit.faction][unit.kind][other]
-        cost_text = f"$ {round(unit.cost * RESPEC_COST)}" if not game.wave_active else "between rounds"
-        draw_panel(screen, ULT_RECTS[1], fill=(70, 52, 104) if not game.wave_active else BUTTON, slant=8)
-        draw_text(screen, fonts["small"], f"SWITCH [{'AB'[other]}]  {switch['name']}", (ULT_RECTS[1].x + 12, ULT_RECTS[1].y + 6))
-        draw_text(screen, fonts["tiny"], cost_text, (ULT_RECTS[1].x + 12, ULT_RECTS[1].y + 30), GREY)
 
+def _draw_ultimate_switch(screen, game, unit, fonts):
+    """At level 4: the reinforce button, and the button that switches to the other ultimate."""
+    if unit.level != 4:
+        return
+    cost = game.reinforce_cost(unit)
+    maxed = unit.reinforce >= REINFORCE_MAX
+    affordable = game.gold >= cost and not maxed
+    label = (f"FULLY REINFORCED ({REINFORCE_MAX}/{REINFORCE_MAX})" if maxed else
+             f"REINFORCE  [G]   $ {cost}   ({unit.reinforce}/{REINFORCE_MAX})")
+    draw_panel(screen, UPGRADE_RECT, fill=(36, 84, 46) if affordable else BUTTON, slant=8)
+    draw_text(screen, fonts["small"], label, UPGRADE_RECT.center, anchor="center")
+    other = 1 - unit.ultimate_index
+    switch = ULTIMATES[unit.faction][unit.kind][other]
+    cost_text = f"$ {round(unit.cost * RESPEC_COST)}" if not game.wave_active else "between rounds"
+    draw_panel(screen, ULT_RECTS[1], fill=(70, 52, 104) if not game.wave_active else BUTTON, slant=8)
+    draw_text(screen, fonts["small"], f"SWITCH [{'AB'[other]}]  {switch['name']}",
+              (ULT_RECTS[1].x + 12, ULT_RECTS[1].y + 6))
+    draw_text(screen, fonts["tiny"], cost_text, (ULT_RECTS[1].x + 12, ULT_RECTS[1].y + 30), GREY)
+
+
+def _draw_sell_button(screen, game, unit, fonts):
+    """The sell button, with a countdown bar while a sale is armed."""
     refund = round(unit.spent * SELL_REFUND)
     armed = game.sell_armed(unit)
     draw_panel(screen, SELL_RECT, fill=(170, 40, 40) if armed else (90, 36, 36), slant=6)
@@ -237,6 +256,9 @@ def _draw_unit_panel(screen, game, fonts):
         left = max(0.0, min(1.0, game.sell_time_left / SELL_CONFIRM_SECONDS))
         pygame.draw.rect(screen, (255, 120, 110), (SELL_RECT.x, SELL_RECT.bottom + 3, SELL_RECT.w * left, 3))
 
+
+def _draw_upgrade_or_ultimate(screen, game, unit, fonts):
+    """Below level 3: the upgrade button. At level 3: the two ultimate choices."""
     if unit.level < 3:
         cost = game.upgrade_cost(unit)
         affordable = game.gold >= cost
