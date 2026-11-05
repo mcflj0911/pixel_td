@@ -44,6 +44,8 @@ def run_to_data(game):
         "kills": game.kills,
         "leaks": dict(game.leaks),
         "slot": game.slot,
+        "countdown": game.countdown,
+        "countdown_locked": game.countdown_locked,
         "units": [{"kind": u.kind, "x": u.x, "y": u.y, "level": u.level, "ultimate_index": u.ultimate_index,
                    "spent": u.spent, "damage": u.damage, "kills": u.kills,
                    "reinforce": u.reinforce, "recipe": u.recipe} for u in game.units],
@@ -54,7 +56,7 @@ def run_from_data(data):
     """Rebuild a Game from the saved form. Raises KeyError, TypeError, ValueError or IndexError if it is damaged."""
     # Imported here: game.py imports this module, so a top-level import would be circular
     from game import Game
-    from config import ULTIMATES
+    from config import ULTIMATES, AUTO_START_SECONDS as ROUND_COUNTDOWN_DEFAULT
     from units import Unit
 
     game = Game(data["faction"], data["map_index"], data["difficulty"])
@@ -63,6 +65,8 @@ def run_from_data(data):
     game.lives = data["lives"]
     game.kills = data["kills"]
     game.leaks = Counter(data.get("leaks", {}))
+    game.countdown = float(data.get("countdown", ROUND_COUNTDOWN_DEFAULT))
+    game.countdown_locked = bool(data.get("countdown_locked", False))
     for item in data["units"]:
         unit = Unit(game.faction, item["kind"], item["x"], item["y"], recipe=item.get("recipe"))
         unit.level = item["level"]

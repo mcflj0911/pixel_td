@@ -18,7 +18,7 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 
 | Key | Action |
 | --- | --- |
-| H / Z | Open the story briefing for humans / zombies. Enter starts, Esc goes back |
+| H / Z | On the title screen: open the story briefing for humans / zombies. Enter starts, Esc goes back. In a battle, H opens the help page |
 | 1 to 7 | Choose a unit (7 is the anti-air unit, which only shoots flyers) |
 | Click a tile | Build, or select a unit on that tile. Click a pickup to collect it |
 | U | Upgrade the selected unit (3 times) |
@@ -26,7 +26,7 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 | G | Reinforce an ultimate unit |
 | X (twice) | Sell the selected unit |
 | C | Combine the selected unit with an adjacent unit it has a recipe for. The two become one unit and a slot is freed. The price rises on harder difficulties |
-| Space | Between rounds: start the next round now. During a round: toggle fast spawning (the enemies come out four times quicker) |
+| Space | Between rounds: start the next round now. During a round: toggle fast spawning (the enemies come out four times quicker). Not during the build time after a map change |
 | F | Toggle game speed |
 | P | Pause |
 | Ctrl+Z | Undo the last build or sale (between rounds) |
@@ -34,9 +34,11 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 | L | Story log: every story line of this run |
 | T | Cycle the text size (Small, Normal, Large) |
 | F11 | Toggle fullscreen |
-| F1 | Controls help |
+| F1 | Same as H: the help page, with tabs for the controls, the combinations and the units. The battle pauses while it is open. Left and right, or a click, change the tab |
 | M, - and = | Mute, volume down and up |
 | Esc | Quit (asks first) |
+
+Every 10 rounds the route changes. Units the new route covers are refunded, and you get 60 seconds of real time to rebuild. Game speed and Space cannot shorten it.
 
 On the title screen: arrows pick the map, D picks the difficulty, 1 to 3 pick a save slot, C continues
 from that slot and A continues from the autosave. The title also shows the best round reached for each side on

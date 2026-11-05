@@ -6,6 +6,7 @@ START_LIVES = 20
 SELL_REFUND = 0.6  # Selling a unit returns this share of everything put into it, upgrades included
 WAVE_BONUS = 25  # Gold for clearing a round
 MAP_EVERY = 10  # Every this many rounds the route is redrawn at random. The waves never stop
+MAP_BUILD_SECONDS = 60.0  # After a map change, this long to rebuild the units the new route removed. Real seconds: game speed and SPACE cannot shorten it
 SPEEDS = (1, 2, 3, 4)  # Game speed multipliers, cycled with F
 BASIC_PER_ROUND = 1  # Basic enemies added per round (was 2: round 11 was out of reach for the bot)
 UNDO_STEPS = 5  # How many builds and sales Ctrl+Z can take back, between rounds

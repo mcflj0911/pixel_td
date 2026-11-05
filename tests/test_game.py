@@ -2,8 +2,10 @@ import unittest
 
 from camera import Camera
 from config import (PATH, START_GOLD, START_LIVES, WAVE_BONUS, MAP_EVERY, MAP_COLS, MAP_ROWS, MAX_UNITS, OPPONENT, UNIT_TYPES,
-                    ENEMY_TYPES, UPGRADE_COST, ULTIMATES, ROLES, SELL_REFUND)
+                    ENEMY_TYPES, UPGRADE_COST, ULTIMATES, ROLES, SELL_REFUND, MAP_BUILD_SECONDS, AUTO_START_SECONDS,
+                    WAVE_BONUS_GROWTH)
 from enemies import Enemy
+from save import run_from_data, run_to_data
 from game import Game
 from waves import build_wave, hp_multiplier, preview
 from world import make_map, generate_path, in_bounds
@@ -320,29 +322,69 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(game.status, "playing")
         self.assertTrue(game.start_wave())
 
-    def test_route_changes_after_every_ten_rounds(self):
+    def clear_round(self, game):
+        """End the running round at once, as if its last enemy had been dealt with."""
+        game._queue = []
+        game.enemies = []
+        game.update(0.05)
+
+    def test_route_changes_when_round_ten_clears(self):
         game = Game("human")
         game.wave = MAP_EVERY - 1
         game.start_wave()  # Round 10 still uses the first map
         self.assertEqual(game.map.index, 0)
-        game.enemies = []
-        game._queue = []
-        run_until_idle(game)
-        game.start_wave()  # Round 11 starts on a new map
-        self.assertEqual(game.map.index, 1)
-        self.assertEqual(game.wave, MAP_EVERY + 1)
+        self.clear_round(game)
+        self.assertEqual(game.map.index, 1)  # The new route appears at once, before round 11
+        self.assertTrue(game.countdown_locked)
 
-    def test_units_on_a_new_route_are_refunded(self):
+    def test_the_map_build_time_is_a_real_minute_even_at_fast_speed(self):
+        game = Game("human")
+        game.wave = MAP_EVERY - 1
+        game.start_wave()
+        self.clear_round(game)
+        self.assertFalse(game.start_wave(), "SPACE cannot skip the build time")
+        for _ in range(30):  # Four times game speed, one real second per step
+            game.update(4.0, real_dt=1.0)
+        self.assertTrue(game.countdown_locked)
+        self.assertFalse(game.wave_active)
+        self.assertAlmostEqual(game.countdown, MAP_BUILD_SECONDS - 30)
+        for _ in range(30):
+            game.update(4.0, real_dt=1.0)
+        self.assertTrue(game.wave_active)  # The round starts itself when the minute is up
+        self.assertEqual(game.wave, MAP_EVERY + 1)
+        self.assertFalse(game.countdown_locked)
+
+    def test_the_build_time_does_not_apply_between_ordinary_rounds(self):
+        game = Game("human")
+        game.wave = 3
+        game.start_wave()
+        self.clear_round(game)
+        self.assertFalse(game.countdown_locked)
+        self.assertEqual(game.countdown, AUTO_START_SECONDS)
+
+    def test_units_on_the_new_route_are_refunded_when_round_ten_clears(self):
         game = Game("human")
         game.gold = 500
         new_cells = sorted(make_map(1).cells)
         target = next(c for c in new_cells if game.map.is_buildable(*c))
         game.place(*target, "rapid")
         self.assertEqual(game.gold, 450)
-        game.wave = MAP_EVERY
-        game.start_wave()
+        game.wave = MAP_EVERY - 1
+        game.start_wave()  # Round 10 runs, and clearing it is what changes the map
+        self.clear_round(game)
         self.assertEqual(len(game.units), 0)
-        self.assertEqual(game.gold, 500)
+        bonus = WAVE_BONUS + WAVE_BONUS_GROWTH * (MAP_EVERY - 1)
+        self.assertEqual(game.gold, 450 + 50 + bonus)  # The unit is refunded in full
+
+    def test_the_build_time_survives_a_save(self):
+        game = Game("human")
+        game.wave = MAP_EVERY - 1
+        game.start_wave()
+        self.clear_round(game)
+        game.countdown = 42.0
+        loaded = run_from_data(run_to_data(game))
+        self.assertTrue(loaded.countdown_locked)
+        self.assertEqual(loaded.countdown, 42.0)
 
     def test_hud_feed_records_kills(self):
         game = Game("human")

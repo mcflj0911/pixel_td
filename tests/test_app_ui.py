@@ -18,6 +18,7 @@ from screens import draw_briefing, draw_help, draw_log, draw_pause, draw_quit_pr
 from settings import DEFAULTS  # noqa: E402
 from ui import ROLE_RECTS, SELL_RECT, UPGRADE_RECT, ULT_RECTS, ui_action  # noqa: E402
 from units import Unit  # noqa: E402
+from ui import HELP_TAB_RECTS  # noqa: E402
 
 
 def center(rect):
@@ -220,6 +221,29 @@ class AppTests(unittest.TestCase):
         self.app.game.status = "lost"
         self.press(pygame.K_r)
         self.assertIsNone(self.app.game)
+
+    def test_h_opens_the_help_and_pauses_the_battle(self):
+        self.start_run()
+        before = self.app.game.countdown
+        self.press(pygame.K_h)
+        self.assertEqual(self.app.overlay, "help")
+        self.app.update(5.0)  # Five seconds pass while the help is open...
+        self.assertEqual(self.app.game.countdown, before)  # ...and the battle does not move
+        self.press(pygame.K_h)
+        self.assertIsNone(self.app.overlay)
+
+    def test_help_tabs_change_with_the_arrows_and_clicks(self):
+        self.start_run()
+        self.press(pygame.K_h)
+        self.press(pygame.K_RIGHT)
+        self.assertEqual(self.app.help_tab, 1)
+        self.press(pygame.K_RIGHT)
+        self.press(pygame.K_RIGHT)
+        self.assertEqual(self.app.help_tab, 0)  # Wraps round
+        self.press(pygame.K_LEFT)
+        self.assertEqual(self.app.help_tab, 2)
+        self.app.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=HELP_TAB_RECTS[1].center, button=1))
+        self.assertEqual(self.app.help_tab, 1)
 
     def test_every_app_screen_draws(self):
         self.app.draw((10, 10))  # Title

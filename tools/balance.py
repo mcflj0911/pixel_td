@@ -108,7 +108,12 @@ def play(faction, difficulty, max_round, rng, combine=True):
         build_round(game, rng, combine)
         game.start_wave()
         steps = 0
-        while game.wave_active and game.status == "playing" and steps < 200000:
+        rebuilt = False
+        # Run until the round ends, or through the build time after a map change
+        while (game.wave_active or game.countdown_locked) and game.status == "playing" and steps < 200000:
+            if game.countdown_locked and not rebuilt:
+                build_round(game, rng, combine)  # Put back the units the new route removed
+                rebuilt = True
             game.update(DT)
             game.drain_sounds()
             steps += 1

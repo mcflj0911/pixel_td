@@ -3,9 +3,9 @@ import textwrap
 
 import pygame
 
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
-from draw_kit import ACCENT, WHITE, GREY, draw_text, draw_panel, shade
-from ui import TITLE_MAP_RECT, TITLE_DIFF_RECT, TITLE_SLOT_RECT
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, UNIT_TYPES, ROLES, COMBINATIONS, ROLE_DESCRIPTIONS
+from draw_kit import ACCENT, WHITE, GREY, BUTTON, draw_text, draw_panel, shade
+from ui import TITLE_MAP_RECT, TITLE_DIFF_RECT, TITLE_SLOT_RECT, HELP_PANEL, HELP_TAB_NAMES, HELP_TAB_RECTS
 import story
 
 
@@ -86,32 +86,78 @@ def draw_pause(screen, fonts, game=None):
     draw_text(screen, fonts["small"], "P to resume", (cx, cy + 80), GREY, anchor="center")
 
 
-def draw_help(screen, fonts):
-    shade(screen, 225)
-    cx = SCREEN_WIDTH // 2
-    draw_panel(screen, pygame.Rect(cx - 370, 60, 740, 560), fill=(14, 16, 20), accent=True)
-    draw_text(screen, fonts["big"], "CONTROLS", (cx, 90), ACCENT, anchor="center")
+def _help_controls(screen, fonts, cx):
     lines = [
         ("Build", "Click a tile.  1-7 choose a unit.  Right-click clears the selection"),
         ("Units", "Click a unit to inspect it.  U upgrades (3 times), then A or B picks an ultimate"),
-        ("Switch", "At level 4, A or B (or the SWITCH button) changes ultimate between rounds, for half a unit price"),
+        ("Switch", "At level 4, A or B (or SWITCH) changes ultimate between rounds, at half price"),
         ("Reinforce", "G on an ultimate unit: +15% damage, up to 5 times, costs more each round"),
+        ("Combine", "C fuses the selected unit with an adjacent partner (see Combinations)"),
         ("Sell", "X twice (within 3 seconds) to confirm.  Refunds 60% of what you spent"),
-        ("Combine", "C fuses the selected unit with an adjacent unit it has a recipe for. Frees a slot"),
-        ("Undo", "Ctrl+Z takes back the last build or sale, between rounds only"),
+        ("Undo", "Ctrl+Z takes back the last build, sale or combine, between rounds only"),
         ("Pickups", "Gold, rage and freeze drop on the route during a round. Click the tile to collect"),
         ("Rounds", "SPACE starts now.  Otherwise they auto-start after 10 seconds"),
-        ("Combos", "Same-type units close together form a group and hit harder (2, 3, 4+)"),
-        ("Time", "F speed.  P pause.  F1 this help"),
+        ("Map change", "Every 10 rounds the route changes. 60 s to rebuild, SPACE cannot skip"),
+        ("Time", "F speed.  P pause.  H or F1: this help (the battle pauses)"),
         ("Save", "F5 saves between rounds to the slot picked on the title screen"),
         ("Sound", "M mute.  - and = volume"),
         ("Quit", "Esc asks first"),
     ]
     for i, (key, text) in enumerate(lines):
-        y = 150 + i * 28
+        y = 150 + i * 27
         draw_text(screen, fonts["small"], key, (cx - 300, y), ACCENT)
         draw_text(screen, fonts["small"], text, (cx - 200, y), WHITE)
-    draw_text(screen, fonts["small"], "F1 or Esc to close", (cx, 150 + len(lines) * 28 + 16), GREY, anchor="center")
+
+
+def _help_combinations(screen, fonts, cx):
+    for col, (faction, heading) in enumerate((("human", "HUMANS"), ("zombie", "ZOMBIES"))):
+        x = cx - 350 + col * 360
+        draw_text(screen, fonts["small"], heading, (x, 150), ACCENT)
+        y = 180
+        for recipe in COMBINATIONS[faction].values():
+            first, second = (UNIT_TYPES[faction][role]["name"] for role in recipe["roles"])
+            draw_text(screen, fonts["small"], recipe["name"], (x, y), WHITE)
+            draw_text(screen, fonts["tiny"], f"{first} + {second}", (x + 150, y + 4), GREY)
+            draw_text(screen, fonts["tiny"], recipe["desc"], (x, y + 20), GREY)
+            y += 62
+    draw_text(screen, fonts["tiny"],
+              "Combining costs half the two prices, more on Hard. Units at level 3 or less, once each",
+              (cx, HELP_PANEL.bottom - 58), GREY, anchor="center")
+
+
+def _help_units(screen, fonts, cx):
+    for col, (faction, heading) in enumerate((("human", "HUMANS"), ("zombie", "ZOMBIES"))):
+        x = cx - 350 + col * 360
+        draw_text(screen, fonts["small"], heading, (x, 150), ACCENT)
+        y = 180
+        for role in ROLES:
+            spec = UNIT_TYPES[faction][role]
+            draw_text(screen, fonts["small"], spec["name"], (x, y), WHITE)
+            draw_text(screen, fonts["tiny"], f"${spec['cost']}", (x + 320, y + 4), ACCENT, anchor="topright")
+            lines = textwrap.wrap(ROLE_DESCRIPTIONS[role], 52)
+            for i, line in enumerate(lines):
+                draw_text(screen, fonts["tiny"], line, (x, y + 20 + i * 15), GREY)
+            y += 20 + 15 * len(lines) + 8
+
+
+def draw_help(screen, fonts, tab=0):
+    """The help page: the controls, the combinations and the units, on tabs. `tab` is the one showing."""
+    shade(screen, 225)
+    cx = SCREEN_WIDTH // 2
+    draw_panel(screen, HELP_PANEL, fill=(14, 16, 20), accent=True)
+    draw_text(screen, fonts["big"], "HELP", (cx, 66), ACCENT, anchor="center")
+    for i, (name, rect) in enumerate(zip(HELP_TAB_NAMES, HELP_TAB_RECTS)):
+        active = i == tab
+        draw_panel(screen, rect, fill=(70, 52, 104) if active else BUTTON, accent=active, slant=8)
+        draw_text(screen, fonts["small"], name, rect.center, WHITE if active else GREY, anchor="center")
+    if tab == 0:
+        _help_controls(screen, fonts, cx)
+    elif tab == 1:
+        _help_combinations(screen, fonts, cx)
+    else:
+        _help_units(screen, fonts, cx)
+    draw_text(screen, fonts["small"], "LEFT / RIGHT or click a tab.   H, F1 or Esc to close",
+              (cx, HELP_PANEL.bottom - 22), GREY, anchor="center")
 
 
 def draw_quit_prompt(screen, fonts):

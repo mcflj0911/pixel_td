@@ -6,7 +6,7 @@ import pygame
 import story
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_COLS, MAP_ROWS, UNIT_TYPES, ROLES, START_LIVES, ULTIMATES,
                     AIR_ROLES, REINFORCE_MAX, START_COLOUR, END_COLOUR, SELL_REFUND, MAX_UNITS, RESPEC_COST,
-                    SELL_CONFIRM_SECONDS, AUTO_START_SECONDS)
+                    SELL_CONFIRM_SECONDS, AUTO_START_SECONDS, MAP_BUILD_SECONDS)
 from draw_kit import (HUD_EDGE, ACCENT, WHITE, GREY, RED, GREEN, DIM, BUTTON, draw_text, draw_panel, dim_colour,
                       shade)
 from sprites import unit_sprite
@@ -30,6 +30,8 @@ def _draw_round(screen, game, fonts, speed):
     draw_text(screen, fonts["mid"], label, (ROUND_RECT.centerx, ROUND_RECT.y + 22), anchor="midtop")
     if game.wave_active:
         state = "IN PROGRESS"
+    elif game.status == "playing" and game.countdown_locked:
+        state = f"MAP BUILD {math.ceil(game.countdown)}s"
     elif game.status == "playing":
         state = f"NEXT IN {math.ceil(game.countdown)}s"
     else:
@@ -37,7 +39,8 @@ def _draw_round(screen, game, fonts, speed):
     draw_text(screen, fonts["tiny"], f"{state}   x{speed}   MAP {game.map.index + 1}",
           (ROUND_RECT.centerx, ROUND_RECT.bottom - 6), GREY, anchor="midbottom")
     if not game.wave_active and game.status == "playing":
-        ratio = max(0.0, min(1.0, game.countdown / AUTO_START_SECONDS))
+        full = MAP_BUILD_SECONDS if game.countdown_locked else AUTO_START_SECONDS
+        ratio = max(0.0, min(1.0, game.countdown / full))
         pygame.draw.rect(screen, ACCENT, (ROUND_RECT.x, ROUND_RECT.bottom - 3, ROUND_RECT.w * ratio, 3))
 
 
@@ -155,7 +158,7 @@ def _draw_hint(screen, game, fonts):
     elif game.wave_active:
         text, colour = "Hold the route. Click a unit to upgrade it", GREY
     else:
-        text, colour = "Click a tile to build    1-7 pick unit    SPACE start now    F1 help    Esc quit", GREY
+        text, colour = "Click a tile to build    1-7 pick unit    SPACE start now    H help    Esc quit", GREY
     draw_text(screen, fonts["small"], text, (SCREEN_WIDTH // 2, HINT_Y), colour, anchor="midtop")
 
 

@@ -16,6 +16,9 @@ SELL_RECT = Rect(PANEL.right - 126, PANEL.y + 8, 116, 24)
 TITLE_MAP_RECT = Rect(SCREEN_WIDTH // 2 - 170, 470, 340, 40)  # Title screen: map and difficulty pickers
 TITLE_DIFF_RECT = Rect(SCREEN_WIDTH // 2 - 170, 518, 340, 40)
 TITLE_SLOT_RECT = Rect(SCREEN_WIDTH // 2 - 170, 566, 340, 40)  # Title screen: which save slot to use
+HELP_PANEL = Rect(SCREEN_WIDTH // 2 - 370, 40, 740, 600)  # The help page, opened with H
+HELP_TAB_NAMES = ("Controls", "Combinations", "Units")
+HELP_TAB_RECTS = [Rect(SCREEN_WIDTH // 2 - 355 + i * 242, 100, 230, 32) for i in range(len(HELP_TAB_NAMES))]
 
 
 def ui_action(pos, game):

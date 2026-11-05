@@ -1,7 +1,8 @@
+import math
 import random
 from collections import Counter
 
-from config import (START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_EVERY, UNIT_TYPES, ULTIMATES,
+from config import (MAP_BUILD_SECONDS, START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_EVERY, UNIT_TYPES, ULTIMATES,
                     COMBINE_COST,
                     UPGRADE_COST, OPPONENT, SELL_REFUND, MAX_UNITS, SELL_CONFIRM_SECONDS, DIFFICULTIES,
                     ENEMY_TYPES, AUTO_START_SECONDS, SPAWN_RUSH, COMBO_RADIUS, REINFORCE_MAX, REINFORCE_COST, REINFORCE_GROWTH,
@@ -63,6 +64,7 @@ class Game:
         self._sell_unit = None  # The unit a first SELL click has armed
         self._sell_timer = 0.0  # Seconds left to confirm the sale
         self.countdown = AUTO_START_SECONDS  # Counts down between rounds, then the next round starts itself
+        self.countdown_locked = False  # True during the build time after a map change: the clock must run out
         # HUD feedback
         self.feed = []  # [text, colour, seconds left], newest last
         self.banner = ""
@@ -348,12 +350,11 @@ class Game:
     def start_wave(self):
         if self.status != "playing" or self.wave_active:
             return False
+        if self.countdown_locked:
+            self.message = f"The new map is still being built: {math.ceil(self.countdown)} s"
+            return False
         self.countdown = AUTO_START_SECONDS
-        next_round = self.wave + 1
-        new_map = next_round > 1 and (next_round - 1) % MAP_EVERY == 0
-        if new_map:
-            self._new_map()
-        self.wave = next_round
+        self.wave = self.wave + 1
         self.history.clear()  # Rounds lock in the build
         self._queue = build_wave(self.enemy_faction, self.wave)
         self._wave_time = 0.0
@@ -362,12 +363,13 @@ class Game:
         self.wave_active = True
         self.rushing = False
         self.message = ""
-        self._announce(f"NEW MAP  ROUND {self.wave}" if new_map else f"ROUND {self.wave}", 2.5)
+        self._announce(f"ROUND {self.wave}", 2.5)
         self._narrate(story.round_line(self.faction, self.wave), 8.0)
         return True
 
     def _new_map(self):
-        """Redraw the route. Units standing on the new route are refunded in full and removed."""
+        """Redraw the route. Units standing on the new route are refunded in full and removed. Called when a round
+        clears, so the player has the build time to put the removed units back."""
         new_map = make_map(self.map.index + 1)
         refund = 0
         kept = []
@@ -383,6 +385,7 @@ class Game:
         self.map = new_map
         self.projectiles = []
         self.zones = []
+        self.history.clear()  # The build it would undo is gone
         self.gold += refund
         if removed:
             self._log(f"Route moved: {removed} unit(s) refunded {refund} gold", NOTE)
@@ -404,13 +407,14 @@ class Game:
             self._narrate(story.boss_line(self.faction), 10.0)
             self.sound_events.append(("boss",))
 
-    def update(self, dt):
-        """Advance the game by dt seconds of play. The steps run in this order, which the rules depend on."""
+    def update(self, dt, real_dt=None):
+        """Advance the game by dt seconds of play. real_dt is the wall-clock time for the same step, which the
+        map build time counts in; it defaults to dt. The steps run in this order, which the rules depend on."""
         self._tick_hud(dt)
         if self.status != "playing":
             return
         self._tick_pickups(dt)
-        self._tick_countdown(dt)
+        self._tick_countdown(dt, dt if real_dt is None else real_dt)
         self._spawn_due(dt)
         self._advance_enemies(dt)
         self.zones = [zone for zone in self.zones if zone.update(dt, self.enemies)]
@@ -426,11 +430,13 @@ class Game:
             return
         self._check_round_cleared()
 
-    def _tick_countdown(self, dt):
-        """Between rounds the next one starts itself when the countdown runs out."""
+    def _tick_countdown(self, dt, real_dt):
+        """Between rounds the next one starts itself when the countdown runs out. The map build time runs on the
+        real clock, so fast forward and fast spawning do not shorten it."""
         if not self.wave_active:
-            self.countdown -= dt
+            self.countdown -= real_dt if self.countdown_locked else dt
             if self.countdown <= 0:
+                self.countdown_locked = False
                 self.start_wave()
 
     def _spawn_due(self, dt):
@@ -503,7 +509,13 @@ class Game:
             bonus = WAVE_BONUS + WAVE_BONUS_GROWTH * (self.wave - 1)
             self.gold += bonus
             self._announce(f"ROUND {self.wave} CLEARED  +{bonus}", 2.5)
-            self.countdown = AUTO_START_SECONDS
+            if self.wave % MAP_EVERY == 0:  # The next round is on a new map: give the player time to rebuild
+                self._new_map()
+                self._announce(f"NEW MAP  BUILD {MAP_BUILD_SECONDS:.0f} SECONDS", 4.0)
+                self.countdown = MAP_BUILD_SECONDS
+                self.countdown_locked = True
+            else:
+                self.countdown = AUTO_START_SECONDS
 
     def _apply_groups(self):
         """Combo groups: same-type units standing close together. Each unit learns its group size.

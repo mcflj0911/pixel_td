@@ -203,6 +203,17 @@ ULTIMATES = {
     },
 }
 
+# What each role does, for the help page. Shared by both factions: the names and costs come from UNIT_TYPES
+ROLE_DESCRIPTIONS = {
+    "rapid": "Steady fire at short to medium range. A good all-rounder, and it can shoot flyers.",
+    "sniper": "Long range, slow, heavy single shots. Its ultimates pierce through enemies.",
+    "splash": "Short range. Area blasts that hit a group of enemies at once.",
+    "support": "Weak shots, but an aura that makes the units around it fire faster.",
+    "flame": "Very short range and very fast. Sets the ground on fire.",
+    "artillery": "Very long range and slow. Huge blasts that arc over the map.",
+    "flak": "Anti-air only. Shoots flyers and ignores ground enemies.",
+}
+
 # --- COMBINATIONS ---
 # Combine two adjacent units (press C with one selected) and they become one unit of the recipe's type. Two units become
 # one, so combining frees a slot under the unit cap. Each recipe names the two roles it joins, the role the new unit

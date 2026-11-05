@@ -19,7 +19,7 @@ from screens import draw_title, draw_quit_prompt, draw_pause, draw_help, draw_br
 from settings import (load_settings, save_settings, load_records, save_records, best_round, record_round,
                       TEXT_SCALES, MAP_CHOICES)
 from sounds import Sounds
-from ui import ui_action
+from ui import ui_action, HELP_TAB_RECTS
 
 ROLE_KEYS = {getattr(pygame, f"K_{i + 1}"): role for i, role in enumerate(ROLES)}
 SLOT_KEYS = {getattr(pygame, f"K_{i + 1}"): i + 1 for i in range(SAVE_SLOTS)}
@@ -92,6 +92,7 @@ class App:
         self.running = True
         self.overlay = None  # "quit" (Esc asks first, so a stray key press does not lose a run), "help" or "log"
         self.paused = False  # P
+        self.help_tab = 0  # Which tab of the help page is showing: controls, combinations or units
 
     # --- Shared state ---
 
@@ -149,8 +150,7 @@ class App:
         elif self.overlay == "quit":
             self._quit_prompt_event(event)
         elif self.overlay == "help":
-            if _key(event, pygame.K_F1, pygame.K_ESCAPE):
-                self.overlay = None
+            self._help_event(event)
         elif self.overlay == "log":
             if _key(event, pygame.K_l, pygame.K_ESCAPE):
                 self.overlay = None
@@ -162,6 +162,20 @@ class App:
             self._title_event(event)
         else:
             self._battle_event(event)
+
+    def _help_event(self, event):
+        """H, F1 or Esc close the help page. Left and right, or a click, change the tab."""
+        if _key(event, pygame.K_h, pygame.K_F1, pygame.K_ESCAPE):
+            self.overlay = None
+        elif _key(event, pygame.K_LEFT):
+            self.help_tab = (self.help_tab - 1) % len(HELP_TAB_RECTS)
+        elif _key(event, pygame.K_RIGHT):
+            self.help_tab = (self.help_tab + 1) % len(HELP_TAB_RECTS)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            point = to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT)
+            for i, rect in enumerate(HELP_TAB_RECTS):
+                if rect.collidepoint(point):
+                    self.help_tab = i
 
     def _quit_prompt_event(self, event):
         if _key(event, pygame.K_y):
@@ -257,7 +271,7 @@ class App:
         game = self.game
         if key == pygame.K_ESCAPE:
             self.overlay = "quit"
-        elif key == pygame.K_F1:
+        elif key in (pygame.K_h, pygame.K_F1):
             self.overlay = "help"
         elif key == pygame.K_l:
             self.overlay = "log"
@@ -312,14 +326,14 @@ class App:
             self.demo.game.drain_sounds()  # The demo battle is silent
             return
         if not self.frozen():  # The battle stops while a menu, the help, the log, the quit prompt or pause is up
-            self._step_battle(dt * SPEEDS[self.speed_index])
+            self._step_battle(dt * SPEEDS[self.speed_index], dt)
         for event in self.game.drain_sounds():
             self.sounds.play_event(event)
 
-    def _step_battle(self, dt):
+    def _step_battle(self, dt, real_dt=None):
         game = self.game
         was_active = game.wave_active
-        game.update(dt)
+        game.update(dt, real_dt)
         if was_active and not game.wave_active and game.status == "playing":
             game.save(autosave_path())  # Every cleared round is an autosave
         if game.status == "lost" and game is not self.logged_game:
@@ -344,7 +358,7 @@ class App:
             draw_hud(self.canvas, self.game, SPEEDS[self.speed_index], self.fonts, pointer,
                      self.sounds.status_text())
             if self.overlay == "help":
-                draw_help(self.canvas, self.fonts)
+                draw_help(self.canvas, self.fonts, self.help_tab)
             elif self.overlay == "log":
                 draw_log(self.canvas, self.fonts, self.game.story_log)
             elif self.paused:
