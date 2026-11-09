@@ -51,7 +51,7 @@ class RecipeLookupTests(unittest.TestCase):
     def test_every_recipe_is_consistent(self):
         for faction, recipes in COMBINATIONS.items():
             for recipe_id, recipe in recipes.items():
-                self.assertEqual(len(recipe["roles"]), 2, recipe_id)
+                self.assertIn(len(recipe["roles"]), (2, 3, 4), recipe_id)
                 self.assertIn(recipe["base"], recipe["roles"], recipe_id)
                 self.assertIn(recipe["base"], UNIT_TYPES[faction], recipe_id)
                 self.assertEqual(recipe_for(faction, *recipe["roles"])[0], recipe_id)
@@ -71,8 +71,8 @@ class CombineRuleTests(unittest.TestCase):
 
     def test_adjacent_matching_units_offer_the_recipe(self):
         a, b = place_pair(self.game, "rapid", "splash")
-        partner, recipe_id, _ = self.game.combine_option(a)
-        self.assertIs(partner, b)
+        partners, recipe_id, _ = self.game.combine_option(a)
+        self.assertEqual(partners, [b])
         self.assertEqual(recipe_id, "breacher")
 
     def test_ultimates_cannot_combine(self):
@@ -231,6 +231,89 @@ class CombineSaveTests(unittest.TestCase):
         for item in data["units"]:
             item.pop("recipe", None)
         self.assertIsNone(run_from_data(data).units[0].recipe)
+
+
+class TrioTests(unittest.TestCase):
+    """Three units in a row: the middle one joins both of its neighbours into one unit."""
+
+    def setUp(self):
+        self.game = Game("human")
+        self.game.gold = 10_000
+
+    def place_trio(self, game, faction_roles):
+        """Place the three roles around a free hub, with the hub in the middle. Returns the hub and its two ends."""
+        free = set(free_cells(game))
+        for col, row in sorted(free):
+            ends = [(col + dc, row + dr) for dc, dr in Game.NEIGHBOURS]
+            usable = [cell for cell in ends if cell in free]
+            if len(usable) >= 2:
+                left, right = usable[0], usable[1]
+                hub = game.place(col, row, faction_roles[1])
+                first = game.place(*left, faction_roles[0])
+                second = game.place(*right, faction_roles[2])
+                assert hub and first and second
+                return hub, first, second
+        raise AssertionError("the map has no free hub with two free neighbours")
+
+    def test_a_trio_is_offered_from_the_middle_unit(self):
+        hub, first, second = self.place_trio(self.game, ("rapid", "support", "splash"))
+        partners, recipe_id, _ = self.game.combine_option(hub)
+        self.assertEqual(recipe_id, "iron_walker")
+        self.assertCountEqual(partners, [first, second])
+
+    def test_a_trio_is_preferred_over_a_pair(self):
+        hub, first, _ = self.place_trio(self.game, ("rapid", "support", "splash"))
+        # The end unit alone only makes a pair; from the hub the trio wins
+        partners, recipe_id, _ = self.game.combine_option(hub)
+        self.assertEqual(len(partners), 2)
+        self.assertEqual(recipe_id, "iron_walker")
+
+    def test_a_trio_costs_all_three_units(self):
+        hub, first, second = self.place_trio(self.game, ("rapid", "support", "splash"))
+        cost = self.game.combine_cost(hub, first, second)
+        self.assertEqual(cost, round((hub.cost + first.cost + second.cost) * COMBINE_COST
+                                     * DIFFICULTIES[self.game.difficulty]["combine"]))
+
+    def test_combining_a_trio_leaves_one_unit(self):
+        hub, first, second = self.place_trio(self.game, ("rapid", "support", "splash"))
+        gold = self.game.gold
+        cost = self.game.combine_cost(hub, first, second)
+        self.game.selected_unit = hub
+        self.assertTrue(self.game.combine())
+        self.assertEqual(len(self.game.units), 1)
+        fused = self.game.units[0]
+        self.assertEqual(fused.recipe, "iron_walker")
+        self.assertEqual(fused.spent, hub.spent + first.spent + second.spent + cost)
+        self.assertEqual(self.game.gold, gold - cost)
+
+    def test_undo_splits_a_trio_back_into_three(self):
+        hub, first, second = self.place_trio(self.game, ("rapid", "support", "splash"))
+        before = list(self.game.units)
+        gold = self.game.gold
+        self.game.selected_unit = hub
+        self.game.combine()
+        self.assertTrue(self.game.undo())
+        self.assertEqual(self.game.units, before)
+        self.assertEqual(self.game.gold, gold)
+
+    def test_every_trio_recipe_combines_from_its_middle_unit(self):
+        for faction, recipes in COMBINATIONS.items():
+            for recipe_id, recipe in recipes.items():
+                if len(recipe["roles"]) != 3:
+                    continue
+                with self.subTest(recipe=recipe_id):
+                    game = Game(faction)
+                    game.gold = 10_000
+                    hub, _, _ = self.place_trio(game, recipe["roles"])
+                    self.assertEqual(game.combine_option(hub)[1], recipe_id)
+
+    def test_a_trio_survives_a_save_and_load(self):
+        hub, _, _ = self.place_trio(self.game, ("rapid", "support", "splash"))
+        self.game.selected_unit = hub
+        self.game.combine()
+        unit = run_from_data(run_to_data(self.game)).units[0]
+        self.assertEqual(unit.recipe, "iron_walker")
+        self.assertEqual(unit.stats["splash"], COMBINATIONS["human"]["iron_walker"]["mods"]["blast"][0])
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ DEFAULTS = {
     "text_scale": "Normal",
     "fullscreen": False,
     "skip_briefing": False,
+    "keys": {},  # Battle key changes, action -> key name. See keymap.py
 }
 
 

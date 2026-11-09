@@ -3,9 +3,13 @@ import textwrap
 
 import pygame
 
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, UNIT_TYPES, ROLES, COMBINATIONS, ROLE_DESCRIPTIONS
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UNIT_TYPES, ROLES, COMBINATIONS, ROLE_DESCRIPTIONS, FACTIONS,
+                    ENEMY_TYPES, DAMAGE_TYPES, DAMAGE_NAMES, DAMAGE_NOTES, WEAK_HIT_COLOUR, RESIST_HIT_COLOUR,
+                    CHARGE_KILLS, SHOT_NAMES, COMBO_KIT)
+from keymap import label
 from draw_kit import ACCENT, WHITE, GREY, BUTTON, draw_text, draw_panel, shade
-from ui import TITLE_MAP_RECT, TITLE_DIFF_RECT, TITLE_SLOT_RECT, HELP_PANEL, HELP_TAB_NAMES, HELP_TAB_RECTS
+from ui import (TITLE_MAP_RECT, TITLE_DIFF_RECT, TITLE_SLOT_RECT, HELP_PANEL, HELP_TAB_NAMES, HELP_TAB_RECTS,
+                HELP_VIEW)
 import story
 
 
@@ -37,10 +41,10 @@ def draw_title(screen, fonts, setup):
     draw_text(screen, fonts["big"], "PIXEL TD", (cx, 110), ACCENT, anchor="center")
     draw_text(screen, fonts["mid"], "SANDBOX DEFENSE", (cx, 160), WHITE, anchor="center")
     options = [("H", "PLAY AS HUMANS"), ("Z", "PLAY AS ZOMBIES")]
-    for i, (key, label) in enumerate(options):
+    for i, (key, text) in enumerate(options):
         rect = pygame.Rect(cx - 170, 220 + i * 60, 340, 50)
         draw_panel(screen, rect, fill=(36, 40, 50), accent=True)
-        draw_text(screen, fonts["mid"], f"{key}   {label}", rect.center, WHITE, anchor="center")
+        draw_text(screen, fonts["mid"], f"{key}   {text}", rect.center, WHITE, anchor="center")
     map_label = "Classic" if setup["map"] == 0 else f"Random {setup['map']}"
     draw_panel(screen, TITLE_MAP_RECT, fill=(28, 30, 38), slant=8)
     draw_text(screen, fonts["small"], f"< >  MAP {setup['map'] + 1}: {map_label}", TITLE_MAP_RECT.center, WHITE,
@@ -86,46 +90,79 @@ def draw_pause(screen, fonts, game=None):
     draw_text(screen, fonts["small"], "P to resume", (cx, cy + 80), GREY, anchor="center")
 
 
+HELP_LAYER_H = 2000  # The help tabs are drawn this tall, then the part in view is copied to the page
+_help_layer = None  # Made once, then reused every frame
+
+
 def _help_controls(screen, fonts, cx):
+    """Returns the y below the last line."""
+    k = label  # The keys are shown as the player has bound them
     lines = [
-        ("Build", "Click a tile.  1-7 choose a unit.  Right-click clears the selection"),
-        ("Units", "Click a unit to inspect it.  U upgrades (3 times), then A or B picks an ultimate"),
-        ("Switch", "At level 4, A or B (or SWITCH) changes ultimate between rounds, at half price"),
-        ("Reinforce", "G on an ultimate unit: +15% damage, up to 5 times, costs more each round"),
-        ("Combine", "C fuses the selected unit with an adjacent partner (see Combinations)"),
-        ("Sell", "X twice (within 3 seconds) to confirm.  Refunds 60% of what you spent"),
+        ("Build", "Click a tile.  1-8 choose a unit.  Right-click clears the selection"),
+        ("Units", f"Click a unit to inspect it.  {k('upgrade')} upgrades (3 times), then "
+                  f"{k('ultimate_a')} or {k('ultimate_b')} picks an ultimate"),
+        ("Switch", f"At level 4, {k('ultimate_a')} or {k('ultimate_b')} (or SWITCH) changes ultimate between rounds"),
+        ("Reinforce", f"{k('reinforce')} on an ultimate unit: +15% damage, up to 5 times, costs more each round"),
+        ("Combine", f"{k('combine')} fuses the selected unit with its neighbours (see Pairs and Trios & quads)"),
+        ("Charge", f"Every unit charges: {CHARGE_KILLS} kills fill it, and the next shot is a charged attack"),
+        ("Move", "Drag a unit to an empty tile between rounds. It is free, and Ctrl+Z takes the move back"),
+        ("Sell", f"{k('sell')} twice (within 3 seconds) to confirm.  Refunds 60% of what you spent"),
         ("Undo", "Ctrl+Z takes back the last build, sale or combine, between rounds only"),
-        ("Pickups", "Gold, rage and freeze drop on the route during a round. Click the tile to collect"),
-        ("Rounds", "SPACE starts now.  Otherwise they auto-start after 10 seconds"),
-        ("Map change", "Every 10 rounds the route changes. 60 s to rebuild, SPACE cannot skip"),
-        ("Time", "F speed.  P pause.  H or F1: this help (the battle pauses)"),
-        ("Save", "F5 saves between rounds to the slot picked on the title screen"),
+        ("Pickups", "Gold, rage and freeze drop on the route in a round. Click the tile to collect"),
+        ("Rounds", f"{k('start')} starts now.  Otherwise they auto-start after 10 seconds"),
+        ("Map change", f"Every 10 rounds the route changes. 60 s to rebuild, {k('start')} cannot skip"),
+        ("Time", f"{k('speed')} speed.  {k('pause')} pause.  {k('help')} or F1: this help (the battle pauses)"),
+        ("Save", f"{k('save')} saves between rounds to the slot picked on the title screen"),
         ("Sound", "M mute.  - and = volume"),
-        ("Quit", "Esc asks first"),
+        ("Quit", "Esc asks first.  Keys can be changed in settings.json (see keymap.py)"),
     ]
     for i, (key, text) in enumerate(lines):
         y = 150 + i * 27
         draw_text(screen, fonts["small"], key, (cx - 300, y), ACCENT)
         draw_text(screen, fonts["small"], text, (cx - 200, y), WHITE)
+    return 150 + len(lines) * 27
 
 
-def _help_combinations(screen, fonts, cx):
+def _help_recipes(screen, fonts, cx, sizes, footer, row=42, shot_below=False):
+    """Combinations with the given numbers of units, for both factions, with the units they join and what they do.
+    `row` is the height of each entry. With `shot_below` the shot style gets a line of its own under the description.
+    Returns the y below the last line, footer included."""
+    bottom = 176
     for col, (faction, heading) in enumerate((("human", "HUMANS"), ("zombie", "ZOMBIES"))):
         x = cx - 350 + col * 360
         draw_text(screen, fonts["small"], heading, (x, 150), ACCENT)
-        y = 180
+        y = 176
         for recipe in COMBINATIONS[faction].values():
-            first, second = (UNIT_TYPES[faction][role]["name"] for role in recipe["roles"])
+            if len(recipe["roles"]) not in sizes:
+                continue
+            names = " + ".join(UNIT_TYPES[faction][role]["short"] for role in recipe["roles"])
             draw_text(screen, fonts["small"], recipe["name"], (x, y), WHITE)
-            draw_text(screen, fonts["tiny"], f"{first} + {second}", (x + 150, y + 4), GREY)
+            draw_text(screen, fonts["tiny"], names, (x + 340, y + 4), GREY, anchor="topright")
             draw_text(screen, fonts["tiny"], recipe["desc"], (x, y + 20), GREY)
-            y += 62
-    draw_text(screen, fonts["tiny"],
-              "Combining costs half the two prices, more on Hard. Units at level 3 or less, once each",
-              (cx, HELP_PANEL.bottom - 58), GREY, anchor="center")
+            if shot_below:
+                draw_text(screen, fonts["tiny"], f"Shots: {SHOT_NAMES[recipe['shot']]}", (x, y + 34), ACCENT)
+            else:
+                draw_text(screen, fonts["tiny"], SHOT_NAMES[recipe["shot"]], (x + 340, y + 20), ACCENT,
+                          anchor="topright")
+            y += row
+        bottom = max(bottom, y)
+    draw_text(screen, fonts["tiny"], footer, (cx, bottom + 12), GREY, anchor="center")
+    return bottom + 30
+
+
+def _help_pairs(screen, fonts, cx):
+    return _help_recipes(screen, fonts, cx, sizes=(2,), row=46, shot_below=True,
+                         footer="Combine with C: a unit and one neighbour make a pair. Half the prices, more on Hard")
+
+
+def _help_big_combos(screen, fonts, cx):
+    return _help_recipes(screen, fonts, cx, sizes=(3, 4), row=52, shot_below=True,
+                         footer="Trios need two neighbours, quads three (a plus shape). The biggest that fits is used")
 
 
 def _help_units(screen, fonts, cx):
+    """Returns the y below the longest column."""
+    bottom = 180
     for col, (faction, heading) in enumerate((("human", "HUMANS"), ("zombie", "ZOMBIES"))):
         x = cx - 350 + col * 360
         draw_text(screen, fonts["small"], heading, (x, 150), ACCENT)
@@ -133,15 +170,95 @@ def _help_units(screen, fonts, cx):
         for role in ROLES:
             spec = UNIT_TYPES[faction][role]
             draw_text(screen, fonts["small"], spec["name"], (x, y), WHITE)
-            draw_text(screen, fonts["tiny"], f"${spec['cost']}", (x + 320, y + 4), ACCENT, anchor="topright")
+            draw_text(screen, fonts["tiny"], f"${spec['cost']}   {DAMAGE_NAMES[spec['dtype']]}   {CHARGE_KILLS} kills",
+                      (x + 320, y + 4), ACCENT, anchor="topright")
             lines = textwrap.wrap(ROLE_DESCRIPTIONS[role], 52)
             for i, line in enumerate(lines):
                 draw_text(screen, fonts["tiny"], line, (x, y + 20 + i * 15), GREY)
-            y += 20 + 15 * len(lines) + 8
+            y += 20 + 15 * len(lines) + 3
+        bottom = max(bottom, y)
+    return bottom
 
 
-def draw_help(screen, fonts, tab=0):
-    """The help page: the controls, the combinations and the units, on tabs. `tab` is the one showing."""
+def _help_upgrades(screen, fonts, cx):
+    """Every combination's own upgrade path (levels 2 and 3) and its two ultimate forms, for both factions.
+    It is long, which is why the help page scrolls. Returns the y below the longest column."""
+    bottom = 176
+    for col, (faction, heading) in enumerate((("human", "HUMANS"), ("zombie", "ZOMBIES"))):
+        x = cx - 350 + col * 360
+        draw_text(screen, fonts["small"], heading, (x, 150), ACCENT)
+        y = 176
+        for recipe_id, recipe in COMBINATIONS[faction].items():
+            kit = COMBO_KIT[faction][recipe_id]
+            draw_text(screen, fonts["small"], recipe["name"], (x, y), WHITE)
+            y += 22
+            steps = (("Lv 2", kit["path"][0]), ("Lv 3", kit["path"][1]),
+                     ("Lv 4 A", kit["ultimates"][0]), ("Lv 4 B", kit["ultimates"][1]))
+            for tag, step in steps:
+                lines = textwrap.wrap(f"{step['name']}: {step['desc']}", 38)[:2]
+                draw_text(screen, fonts["tiny"], tag, (x, y + 2), ACCENT)
+                for i, line in enumerate(lines):  # The name is bright, the rest of the line dimmer
+                    draw_text(screen, fonts["tiny"], line, (x + 50, y + 2 + i * 13), WHITE if i == 0 else GREY)
+                y += 14 + 13 * (len(lines) - 1)
+            y += 8
+        bottom = max(bottom, y)
+    return bottom
+
+
+def _damage_users(dtype):
+    """The units that deal this damage type, from both factions, with no repeats."""
+    names = []
+    for faction in FACTIONS:
+        for role in ROLES:
+            spec = UNIT_TYPES[faction][role]
+            if spec["dtype"] == dtype and spec["name"] not in names:
+                names.append(spec["name"])
+    return ", ".join(names)
+
+
+def _damage_enemies(dtype, weak):
+    """The enemies that take more (weak=True) or less damage of this type, with the multiplier, from both factions.
+    Empty when there are none."""
+    found = {}
+    for faction in FACTIONS:
+        for spec in ENEMY_TYPES[faction].values():
+            factor = spec.get("vs", {}).get(dtype, 1.0)
+            if factor != 1.0 and (factor > 1.0) == weak:
+                found.setdefault(spec["name"], factor)
+    return ", ".join(f"{name} x{factor:g}" for name, factor in found.items())
+
+
+def _help_damage(screen, fonts, cx):
+    """Returns the y below the footer."""
+    x = cx - 330
+    draw_text(screen, fonts["tiny"],
+              "Every shot deals one damage type. Some enemies take more of a type, some less. Armour still applies on top.",
+              (cx, 150), GREY, anchor="center")
+    y = 176
+    for dtype in DAMAGE_TYPES:
+        name = DAMAGE_NAMES[dtype] + (f"  ({DAMAGE_NOTES[dtype]})" if dtype in DAMAGE_NOTES else "")
+        draw_text(screen, fonts["small"], name, (x, y), WHITE)
+        draw_text(screen, fonts["tiny"], f"Dealt by: {_damage_users(dtype)}", (x + 14, y + 24), GREY)
+        weak = _damage_enemies(dtype, weak=True)
+        resist = _damage_enemies(dtype, weak=False)
+        draw_text(screen, fonts["tiny"], f"Strong against: {weak or 'nothing special'}", (x + 14, y + 40),
+                  WEAK_HIT_COLOUR if weak else GREY)
+        draw_text(screen, fonts["tiny"], f"Resisted by: {resist or 'nothing special'}", (x + 14, y + 55),
+                  RESIST_HIT_COLOUR if resist else GREY)
+        y += 72
+    draw_text(screen, fonts["tiny"],
+              "Blasts always deal explosion damage. Fire and acid left on the ground always deal burn damage.",
+              (cx, y + 8), GREY, anchor="center")
+    return y + 30
+
+
+HELP_DRAWERS = (_help_controls, _help_pairs, _help_big_combos, _help_units, _help_upgrades, _help_damage)
+
+
+def draw_help(screen, fonts, tab=0, scroll=0):
+    """The help page: the controls, the combinations, the units, the upgrades and the damage types, on tabs. `tab` is
+    the one showing, and `scroll` how far down its content is. Returns the most the page can scroll (0 when it fits)."""
+    global _help_layer
     shade(screen, 225)
     cx = SCREEN_WIDTH // 2
     draw_panel(screen, HELP_PANEL, fill=(14, 16, 20), accent=True)
@@ -150,14 +267,33 @@ def draw_help(screen, fonts, tab=0):
         active = i == tab
         draw_panel(screen, rect, fill=(70, 52, 104) if active else BUTTON, accent=active, slant=8)
         draw_text(screen, fonts["small"], name, rect.center, WHITE if active else GREY, anchor="center")
-    if tab == 0:
-        _help_controls(screen, fonts, cx)
-    elif tab == 1:
-        _help_combinations(screen, fonts, cx)
-    else:
-        _help_units(screen, fonts, cx)
-    draw_text(screen, fonts["small"], "LEFT / RIGHT or click a tab.   H, F1 or Esc to close",
+
+    # The tab is drawn onto a tall layer in page coordinates, then the part in view is copied across. The layer grows
+    # if a tab is taller than it, and the tab is drawn again
+    height = HELP_LAYER_H
+    while True:
+        if _help_layer is None or _help_layer.get_height() < height:
+            _help_layer = pygame.Surface((SCREEN_WIDTH, height))
+        _help_layer.fill((14, 16, 20))
+        bottom = HELP_DRAWERS[tab](_help_layer, fonts, cx)
+        if bottom + 16 <= _help_layer.get_height():
+            break
+        height = bottom + 64
+    max_scroll = max(0, bottom + 16 - HELP_VIEW.bottom)
+    scroll = max(0, min(scroll, max_scroll))
+    screen.blit(_help_layer, HELP_VIEW.topleft, area=pygame.Rect(HELP_VIEW.x, HELP_VIEW.y + scroll, HELP_VIEW.w,
+                                                                 HELP_VIEW.h))
+    if max_scroll:  # A scroll bar: its thumb is the part of the page in view
+        track = pygame.Rect(HELP_VIEW.right + 6, HELP_VIEW.y, 5, HELP_VIEW.h)
+        pygame.draw.rect(screen, BUTTON, track)
+        content = bottom + 16 - HELP_VIEW.y
+        thumb_h = max(24, int(HELP_VIEW.h * HELP_VIEW.h / content))
+        thumb_y = track.y + int((track.h - thumb_h) * scroll / max_scroll)
+        pygame.draw.rect(screen, ACCENT, (track.x, thumb_y, track.w, thumb_h))
+
+    draw_text(screen, fonts["small"], "LEFT / RIGHT change tab.   UP / DOWN or the wheel scroll.   H, F1 or Esc close",
               (cx, HELP_PANEL.bottom - 22), GREY, anchor="center")
+    return max_scroll
 
 
 def draw_quit_prompt(screen, fonts):

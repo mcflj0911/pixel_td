@@ -28,7 +28,8 @@ class SaveFileTests(unittest.TestCase):
         with mock.patch("save.os.replace", side_effect=OSError("disk full")):
             ok, message = write_save(self.path, {"version": SAVE_VERSION, "wave": 9})
         self.assertFalse(ok)
-        self.assertEqual(message, "Could not save the game")
+        self.assertTrue(message.startswith("Could not save: "), message)
+        self.assertIn("F5", message)
         data, reason = read_save(self.path)
         self.assertIsNone(reason)
         self.assertEqual(data["wave"], 3)

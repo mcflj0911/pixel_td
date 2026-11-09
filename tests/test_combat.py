@@ -4,7 +4,7 @@ from config import (ENEMY_TYPES, ROLES, AIR_ROLES, COMBO_TIERS, MIXED_SQUAD_BONU
                     UNIT_TYPES)
 from enemies import Enemy
 from game import Game
-from projectiles import can_hit
+from projectiles import Projectile, can_hit
 from units import Unit, group_multiplier, squad_multiplier
 from world import make_map
 
@@ -16,7 +16,7 @@ def route():
 class FlakTests(unittest.TestCase):
 
     def test_flak_is_the_seventh_role_and_can_shoot_flyers(self):
-        self.assertEqual(ROLES[-1], "flak")
+        self.assertEqual(ROLES[6], "flak")  # Key 7; the rocket is key 8
         self.assertIn("flak", AIR_ROLES)
 
     def test_flak_ignores_ground_enemies(self):
@@ -38,6 +38,48 @@ class FlakTests(unittest.TestCase):
         for faction in ("human", "zombie"):
             self.assertTrue(UNIT_TYPES[faction]["flak"]["air_only"])
             self.assertEqual(len(ULTIMATES[faction]["flak"]), 2)
+
+
+class RocketTests(unittest.TestCase):
+    """The rocket (Rocketeer, Spore Colony): slow homing missiles that leave a cloud on the ground."""
+
+    def test_both_factions_have_rocket_units_and_ultimates(self):
+        for faction in ("human", "zombie"):
+            self.assertIn("burn", UNIT_TYPES[faction]["rocket"])
+            self.assertEqual(len(ULTIMATES[faction]["rocket"]), 2)
+
+    def test_rockets_hit_ground_enemies_only(self):
+        self.assertNotIn("rocket", AIR_ROLES)
+
+    def test_a_missile_leaves_a_cloud_that_keeps_hurting_the_ground(self):
+        target = Enemy("zombie", "walker", route())
+        target.x, target.y = 5.5, 5.5
+        stats = dict(Unit("human", "rocket", 5.5, 5.5).stats)
+        zones = []
+        Projectile(5.5, 5.5, "human", "rocket", target, stats)._impact([target], zones, [])
+        self.assertEqual(len(zones), 1)
+        zone = zones[0]
+        self.assertEqual(zone.life, UNIT_TYPES["human"]["rocket"]["burn"][1])
+        before = target.hp
+        for _ in range(20):
+            zone.update(0.1, [target])
+        self.assertLess(target.hp, before)  # Still burning two seconds later
+
+    def test_the_cloud_is_gone_after_its_time(self):
+        walker = Enemy("zombie", "walker", route())
+        walker.x, walker.y = 5.5, 5.5
+        stats = dict(Unit("human", "rocket", 5.5, 5.5).stats)
+        zones = []
+        Projectile(5.5, 5.5, "human", "rocket", walker, stats)._impact([walker], zones, [])
+        self.assertFalse(zones[0].update(zones[0].life + 0.1, []))
+
+    def test_the_first_ultimates_linger_for_seven_seconds(self):
+        for faction in ("human", "zombie"):
+            unit = Unit(faction, "rocket", 1.5, 1.5)
+            unit.level = 4
+            unit.ultimate_index = 0
+            unit.ultimate = ULTIMATES[faction]["rocket"][0]
+            self.assertEqual(unit.stats["burn"][1], 7.0, faction)
 
 
 class ArmourTests(unittest.TestCase):

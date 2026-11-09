@@ -19,13 +19,14 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 | Key | Action |
 | --- | --- |
 | H / Z | On the title screen: open the story briefing for humans / zombies. Enter starts, Esc goes back. In a battle, H opens the help page |
-| 1 to 7 | Choose a unit (7 is the anti-air unit, which only shoots flyers) |
+| Drag a unit | Between rounds, press a unit and drag it to an empty tile to move it. Free, and Ctrl+Z takes the move back |
+| 1 to 8 | Choose a unit (7 is the anti-air unit, which only shoots flyers; 8 is the rocket, which fires lingering missiles) |
 | Click a tile | Build, or select a unit on that tile. Click a pickup to collect it |
 | U | Upgrade the selected unit (3 times) |
 | A / B | Pick one of two ultimate forms at level 4. At level 4, A or B switches to the other form between rounds, for half the unit price |
 | G | Reinforce an ultimate unit |
 | X (twice) | Sell the selected unit |
-| C | Combine the selected unit with an adjacent unit it has a recipe for. The two become one unit and a slot is freed. The price rises on harder difficulties |
+| C | Combine the selected unit with the adjacent unit(s) it has a recipe for. Two units make a pair, three make a trio, and four in a plus shape make an ultimate combination (a Bastion for humans, a Hive Colossus for zombies). Each unit taken in frees a slot. The result takes on a new look: mechanical parts for humans, bigger mutations for zombies. The price rises on harder difficulties |
 | Space | Between rounds: start the next round now. During a round: toggle fast spawning (the enemies come out four times quicker). Not during the build time after a map change |
 | F | Toggle game speed |
 | P | Pause |
@@ -34,7 +35,7 @@ The game is written against `pygame-ce`. Sound needs `numpy`.
 | L | Story log: every story line of this run |
 | T | Cycle the text size (Small, Normal, Large) |
 | F11 | Toggle fullscreen |
-| F1 | Same as H: the help page, with tabs for the controls, the combinations and the units. The battle pauses while it is open. Left and right, or a click, change the tab |
+| F1 | Same as H: the help page, with tabs for the controls, the pairs, the trios and quads, the units and the damage types. The battle pauses while it is open. Left and right, or a click, change the tab |
 | M, - and = | Mute, volume down and up |
 | Esc | Quit (asks first) |
 
@@ -46,7 +47,24 @@ the chosen difficulty. The briefing has a "don't show this again" option (D), an
 between sessions in `settings.json`.
 
 Best rounds are kept in `records.json`, and the autosave in `autosave.json`. Those files and the save slots are
-written next to the game and are not part of the project (see `.gitignore`).
+kept in your user data folder (`%APPDATA%\PixelTD` on Windows, `~/.local/share/PixelTD` elsewhere), so Dropbox
+cannot lock them mid-save. Saves left in the game's own folder by older versions are copied over on first start.
+Set `PIXEL_TD_DATA` to use another folder. If a save fails, the message says why.
+
+Battle keys can be changed: add a `"keys"` entry to `settings.json`, such as `{"keys": {"upgrade": "e"}}`. Names
+are pygame key names. See `keymap.py`. Keys for 1 to 8, Esc, F1, R and the sound keys stay fixed.
+
+The unit cap is 24, and it grows by 2 every 3 rounds from round 12 (up to 32), so late-game gold has a use.
+
+## Charged attacks and combined shots
+
+Every unit charges: every 10 kills fill the charge, shown as a bar above the unit, in the unit panel, and as a gold ring on the map. The next shot is a charged attack with three times the damage, two more pierce, a wider grenade blast, and a gold trail and impact. The meter stays full until that shot fires. Combined units have their own shot styles, so each combination looks different when it fires. Every unit also kicks back when it fires, by a different amount for each role.
+
+## Damage types
+
+Every shot has a damage type, set by its role: bullets (rifle, medic, spitter, shaman), armour-piercing rounds (marksman, lobber), explosions (grenades, mortars, rockets), burn (flamethrowers, and the fire or acid a rocket leaves behind) and flak (anti-air). Blasts always deal explosion damage, and fire or acid on the ground always deals burn damage.
+
+Each enemy has strengths and weaknesses against these types. Some take x1.5 or more from a type, some take less. Armour still applies on top. A weakness shows its damage number in orange, a resistance in grey, and the enemy's hover card lists both. The Damage tab of the help page lists them all. The tables are `DAMAGE_TYPES`, the `dtype` of each role and the `vs` of each enemy in `config/combat.py`.
 
 ## Balance check
 
@@ -73,6 +91,8 @@ python -m unittest discover -s tests -t .
 | `game.py` | Game rules and state: rounds, gold, building, upgrades, the round update |
 | `history.py` | Undo for the build phase (placements and sales between rounds) |
 | `save.py` | Save files: converting a run to and from its saved form, reading and error reasons |
+| `paths.py` | Where saves and settings live, and copying saves over from older versions |
+| `keymap.py` | The battle keys, and the changes made in `settings.json` |
 | `atomic_json.py` | The atomic JSON read and write shared by the save, settings and records files |
 | `settings.py` | Remembered settings and best-round records (safe defaults) |
 | `display.py` | Fits the fixed-size game canvas into the window (fullscreen and resizing) |

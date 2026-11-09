@@ -3,7 +3,7 @@ from pygame import Rect
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, ROLES
 
 # Screen rectangles of the clickable HUD. hud.py draws into these, and main.py hit-tests them here
-SLOT_W, SLOT_H, SLOT_GAP = 110, 70, 6
+SLOT_W, SLOT_H, SLOT_GAP = 98, 70, 6  # Eight slots, so they are narrower than they were
 HOTBAR_X = 150
 HOTBAR_Y = SCREEN_HEIGHT - 92
 ROLE_RECTS = {role: Rect(HOTBAR_X + i * (SLOT_W + SLOT_GAP), HOTBAR_Y, SLOT_W, SLOT_H)
@@ -17,8 +17,14 @@ TITLE_MAP_RECT = Rect(SCREEN_WIDTH // 2 - 170, 470, 340, 40)  # Title screen: ma
 TITLE_DIFF_RECT = Rect(SCREEN_WIDTH // 2 - 170, 518, 340, 40)
 TITLE_SLOT_RECT = Rect(SCREEN_WIDTH // 2 - 170, 566, 340, 40)  # Title screen: which save slot to use
 HELP_PANEL = Rect(SCREEN_WIDTH // 2 - 370, 40, 740, 600)  # The help page, opened with H
-HELP_TAB_NAMES = ("Controls", "Combinations", "Units")
-HELP_TAB_RECTS = [Rect(SCREEN_WIDTH // 2 - 355 + i * 242, 100, 230, 32) for i in range(len(HELP_TAB_NAMES))]
+HELP_TAB_NAMES = ("Controls", "Pairs", "Trios & quads", "Units", "Upgrades", "Damage")
+HELP_TAB_GAP = 7
+HELP_TAB_W = (HELP_PANEL.w - 52 - (len(HELP_TAB_NAMES) - 1) * HELP_TAB_GAP) // len(HELP_TAB_NAMES)
+HELP_TAB_RECTS = [Rect(HELP_PANEL.x + 26 + i * (HELP_TAB_W + HELP_TAB_GAP), 100, HELP_TAB_W, 32)
+                  for i in range(len(HELP_TAB_NAMES))]
+# The part of a help tab that is in view. The rest scrolls into it (UP and DOWN, the mouse wheel, or Page Up and Down)
+HELP_VIEW = Rect(HELP_PANEL.x + 14, 142, HELP_PANEL.w - 40, HELP_PANEL.bottom - 40 - 142)
+HELP_SCROLL_STEP = 40
 
 
 def ui_action(pos, game):

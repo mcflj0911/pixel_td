@@ -19,6 +19,12 @@ WAVE_SPEED_GROWTH = 0.03
 
 # --- LIMITS, FLYING AND BOSSES ---
 MAX_UNITS = 24  # Hard cap on placed units. Combining two units into one frees a slot
+# The cap grows late in a run, so surplus gold has a use: from round CAP_BONUS_FROM, every CAP_BONUS_EVERY rounds
+# add CAP_BONUS_STEP units, up to CAP_BONUS_MAX more
+CAP_BONUS_FROM = 12
+CAP_BONUS_EVERY = 3
+CAP_BONUS_STEP = 2
+CAP_BONUS_MAX = 8
 AIR_ROLES = ("rapid", "sniper", "flak")  # Only these can shoot flying enemies
 FLY_HEIGHT = 1.6  # How high flying enemies hover, in tiles
 BOSS_EVERY = 5  # A boss joins the end of every this many rounds

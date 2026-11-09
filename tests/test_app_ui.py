@@ -12,12 +12,14 @@ from config import MAP_COLS, MAP_ROWS, SCREEN_WIDTH, SCREEN_HEIGHT, ULTIMATES  #
 from demo import Demo  # noqa: E402
 from draw_kit import make_fonts  # noqa: E402
 from game import Game  # noqa: E402
-from hud import draw_hud  # noqa: E402
+from enemies import Enemy  # noqa: E402
+from hud import draw_enemy_tip, draw_hud, draw_tooltip  # noqa: E402
 from render import draw_scene  # noqa: E402
 from screens import draw_briefing, draw_help, draw_log, draw_pause, draw_quit_prompt, draw_title  # noqa: E402
 from settings import DEFAULTS  # noqa: E402
 from ui import ROLE_RECTS, SELL_RECT, UPGRADE_RECT, ULT_RECTS, ui_action  # noqa: E402
 from units import Unit  # noqa: E402
+from world import make_map  # noqa: E402
 from ui import HELP_TAB_RECTS  # noqa: E402
 
 
@@ -110,6 +112,13 @@ class RenderingTests(unittest.TestCase):
         draw_help(self.screen, self.fonts)
         draw_log(self.screen, self.fonts, ["first line", "second line"])
         draw_quit_prompt(self.screen, self.fonts)
+
+    def test_every_help_tab_and_the_unit_and_enemy_tips_draw(self):
+        for tab in range(len(HELP_TAB_RECTS)):  # Controls, pairs, trios and quads, units, damage
+            draw_help(self.screen, self.fonts, tab)
+        game = Game("human")
+        draw_tooltip(self.screen, self.fonts, game, "sniper", (200, 200))
+        draw_enemy_tip(self.screen, self.fonts, Enemy("zombie", "brute", make_map(0).route), (300, 200))
 
     def test_demo_battle_runs_and_draws(self):
         demo = Demo(seed=1)
@@ -237,11 +246,11 @@ class AppTests(unittest.TestCase):
         self.press(pygame.K_h)
         self.press(pygame.K_RIGHT)
         self.assertEqual(self.app.help_tab, 1)
-        self.press(pygame.K_RIGHT)
-        self.press(pygame.K_RIGHT)
-        self.assertEqual(self.app.help_tab, 0)  # Wraps round
+        for _ in range(len(HELP_TAB_RECTS) - 1):  # Right through the rest of the tabs...
+            self.press(pygame.K_RIGHT)
+        self.assertEqual(self.app.help_tab, 0)  # ...and it wraps round
         self.press(pygame.K_LEFT)
-        self.assertEqual(self.app.help_tab, 2)
+        self.assertEqual(self.app.help_tab, len(HELP_TAB_RECTS) - 1)
         self.app.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=HELP_TAB_RECTS[1].center, button=1))
         self.assertEqual(self.app.help_tab, 1)
 

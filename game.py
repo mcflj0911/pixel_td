@@ -1,17 +1,21 @@
+import itertools
 import math
 import random
 from collections import Counter
 
-from config import (MAP_BUILD_SECONDS, START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_EVERY, UNIT_TYPES, ULTIMATES,
+from config import (MAP_COLS, MAP_ROWS, MAP_BUILD_SECONDS, START_GOLD, START_LIVES, WAVE_BONUS, WAVE_BONUS_GROWTH, MAP_EVERY, UNIT_TYPES,
                     COMBINE_COST,
                     UPGRADE_COST, OPPONENT, SELL_REFUND, MAX_UNITS, SELL_CONFIRM_SECONDS, DIFFICULTIES,
+                    CAP_BONUS_FROM, CAP_BONUS_EVERY, CAP_BONUS_STEP, CAP_BONUS_MAX, AIR_ROLES,
                     ENEMY_TYPES, AUTO_START_SECONDS, SPAWN_RUSH, COMBO_RADIUS, REINFORCE_MAX, REINFORCE_COST, REINFORCE_GROWTH,
                     RESPEC_COST, PICKUP_EVERY, PICKUP_GOLD, RAGE_SECONDS, RAGE_FIRE, FREEZE_SECONDS,
                     FREEZE_FACTOR)
 from config import BOSS_EVERY, STORY_LOG_LINES
 from enemies import Enemy
 from history import BuildHistory
-from projectiles import Puff
+from projectiles import Puff, Floater
+from config import CHARGE_COLOUR, MOVE_SECONDS
+from enemies import Corpse
 from save import read_save, run_from_data, run_to_data, write_save
 import story
 from pickups import KINDS, Pickup
@@ -51,6 +55,7 @@ class Game:
         self.projectiles = []
         self.zones = []  # Burn zones on the ground
         self.effects = []  # Short-lived puffs
+        self.corpses = []  # Killed enemies, falling over for a moment
         self.selected = "rapid"  # Role the player will build next
         self.selected_unit = None  # A placed unit being inspected or upgraded
         self.status = "playing"  # "playing" or "lost"
@@ -107,19 +112,63 @@ class Game:
                 return unit
         return None
 
+    def unit_cap(self):
+        """How many units can be placed now: MAX_UNITS, growing late in the run (see CAP_BONUS_* in rules.py)."""
+        if self.wave < CAP_BONUS_FROM:
+            return MAX_UNITS
+        steps = 1 + (self.wave - CAP_BONUS_FROM) // CAP_BONUS_EVERY
+        return MAX_UNITS + min(CAP_BONUS_MAX, steps * CAP_BONUS_STEP)
+
     def placement_error(self, col, row, role=None):
-        """None if a unit of this role can be built on the cell, otherwise the reason."""
+        """None if a unit of this role can be built on the cell, otherwise the reason, in words the player can act on."""
         role = role or self.selected
         if self.status != "playing":
             return "Game over"
-        if not self.map.is_buildable(col, row) or self.unit_at(col, row) is not None:
-            return "Can't build there"
-        if len(self.units) >= MAX_UNITS:
-            return f"Unit cap: {MAX_UNITS} units. Sell or combine one first"
+        terrain = self._tile_error(col, row)
+        if terrain:
+            return terrain
+        cap = self.unit_cap()
+        if len(self.units) >= cap:
+            return f"Unit cap reached ({cap}). Sell or combine one first"
         cost = UNIT_TYPES[self.faction][role]["cost"]
         if cost > self.gold:
-            return f"Need {cost} gold"
+            return f"Need {cost} gold for a {UNIT_TYPES[self.faction][role]['name']}, you have {self.gold}"
         return None
+
+    def _tile_error(self, col, row):
+        """Why a unit cannot stand on this tile (the map, the route, the buildable ground, another unit), or None."""
+        if not (0 <= col < MAP_COLS and 0 <= row < MAP_ROWS):
+            return "That is outside the map"
+        if self.map.mask[col, row]:
+            return "That is the enemies' route. Build beside it"
+        if not self.map.is_buildable(col, row):
+            return "Can't build there"
+        if self.unit_at(col, row) is not None:
+            return "A unit is already there. Click it to select it"
+        return None
+
+    def move_error(self, col, row):
+        """None if the selected unit could be moved to this tile now, otherwise the reason."""
+        if self.status != "playing":
+            return "Game over"
+        if self.wave_active:
+            return "Can't move a unit during a round"
+        return self._tile_error(col, row)
+
+    def move_unit(self, unit, col, row):
+        """Move a placed unit to an empty tile. Between rounds only. It is free, and Ctrl+Z takes the move back."""
+        if (int(unit.x), int(unit.y)) == (col, row):
+            return False
+        error = self.move_error(col, row)
+        if error:
+            self.message = error
+            return False
+        self.history.record(("move", unit, (unit.x, unit.y)))
+        unit.move_from = (unit.x, unit.y)  # The unit hops from where it was
+        unit.move_time = MOVE_SECONDS
+        unit.x, unit.y = col + 0.5, row + 0.5
+        self.message = f"Moved {unit.display_name}"
+        return True
 
     def place(self, col, row, role=None):
         role = role or self.selected
@@ -176,7 +225,7 @@ class Game:
         self.gold -= cost
         unit.spent += cost
         unit.level += 1
-        self.message = f"{UNIT_TYPES[unit.faction][unit.kind]['name']} is now level {unit.level}"
+        self.message = f"{unit.display_name} is now level {unit.level}"
         return True
 
     def choose_ultimate(self, index):
@@ -200,7 +249,7 @@ class Game:
         unit.spent += cost
         unit.level = 4
         unit.ultimate_index = index
-        unit.ultimate = ULTIMATES[unit.faction][unit.kind][index]
+        unit.ultimate = unit.ultimate_options[index]
         self.message = f"{unit.ultimate['name']}!"
         return True
 
@@ -219,7 +268,7 @@ class Game:
         self.gold -= cost
         unit.spent += cost
         unit.ultimate_index = index
-        unit.ultimate = ULTIMATES[unit.faction][unit.kind][index]
+        unit.ultimate = unit.ultimate_options[index]
         self.message = f"Switched to {unit.ultimate['name']}"
         return True
 
@@ -255,7 +304,7 @@ class Game:
         self.selected_unit = None
         self.gold += refund
         self.sound_events.append(("cash",))
-        name = UNIT_TYPES[unit.faction][unit.kind]["name"]
+        name = unit.display_name
         self.message = f"Sold {name} for {refund} gold"
         self._log(f"{name} sold  +{refund}", NOTE)
         return True
@@ -264,28 +313,54 @@ class Game:
 
     NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))  # Edge-sharing cells
 
-    def combine_option(self, unit):
-        """The adjacent unit that `unit` can combine with, as (partner, recipe_id, recipe), or None.
-        Ultimates and already-combined units take no part. Neighbours are tried in NEIGHBOURS order."""
-        if unit is None or unit.level > 3 or unit.recipe is not None:
-            return None
+    def _combinable_neighbours(self, unit):
+        """Units next to `unit` that could take part in a combination: not ultimates, not already combined."""
         col, row = int(unit.x), int(unit.y)
+        found = []
         for dc, dr in self.NEIGHBOURS:
             other = self.unit_at(col + dc, row + dr)
-            if other is None or other.level > 3 or other.recipe is not None:
-                continue
-            found = recipe_for(self.faction, unit.kind, other.kind)
+            if other is not None and other.level <= 3 and other.recipe is None:
+                found.append(other)
+        return found
+
+    def combine_option(self, unit):
+        """What combining `unit` would do, as (partners, recipe_id, recipe), or None. The partners are the units
+        next to it that it joins: three for a quad, two for a trio, one for a pair. The biggest recipe that fits is
+        taken. Neither the unit nor the partners may be ultimates or already combined."""
+        if unit is None or unit.level > 3 or unit.recipe is not None:
+            return None
+        neighbours = self._combinable_neighbours(unit)
+        for partners in self._block_partners(unit):  # A quad in a 2 x 2 block, which is the usual shape
+            found = recipe_for(self.faction, unit.kind, *(other.kind for other in partners))
             if found is not None:
-                return (other,) + found
+                return list(partners), found[0], found[1]
+        for size in (3, 2, 1):
+            for partners in itertools.combinations(neighbours, size):
+                found = recipe_for(self.faction, unit.kind, *(other.kind for other in partners))
+                if found is not None:
+                    return list(partners), found[0], found[1]
         return None
 
-    def combine_cost(self, unit, partner):
-        """Gold to combine two units: a share of their base prices, scaled by the difficulty."""
-        return round((unit.cost + partner.cost) * COMBINE_COST * DIFFICULTIES[self.difficulty]["combine"])
+    def _block_partners(self, unit):
+        """Each set of three combinable units that makes a 2 x 2 block with `unit`, as a list of partner lists."""
+        col, row = int(unit.x), int(unit.y)
+        found = []
+        for left in (col - 1, col):  # The 2 x 2 blocks that contain this cell
+            for top in (row - 1, row):
+                cells = [(c, r) for c in (left, left + 1) for r in (top, top + 1) if (c, r) != (col, row)]
+                others = [self.unit_at(c, r) for c, r in cells]
+                if all(o is not None and o.level <= 3 and o.recipe is None for o in others):
+                    found.append(others)
+        return found
+
+    def combine_cost(self, *units):
+        """Gold to combine these units: a share of their base prices, scaled by the difficulty."""
+        base = sum(unit.cost for unit in units)
+        return round(base * COMBINE_COST * DIFFICULTIES[self.difficulty]["combine"])
 
     def combine(self):
-        """Fuse the selected unit with the adjacent unit it has a recipe for. The result takes the first unit's
-        tile, and two units become one, so a slot is freed. Returns True when the units are combined."""
+        """Fuse the selected unit with the units it has a recipe for. The result takes the selected unit's tile,
+        and the members become one unit, so slots are freed. Returns True when they are combined."""
         unit = self.selected_unit
         if unit is None:
             self.message = "Select a unit first"
@@ -294,22 +369,23 @@ class Game:
         if option is None:
             self.message = "Put a unit it combines with next to it"
             return False
-        partner, recipe_id, recipe = option
-        cost = self.combine_cost(unit, partner)
+        partners, recipe_id, recipe = option
+        members = [unit] + partners
+        cost = self.combine_cost(*members)
         if cost > self.gold:
             self.message = f"Need {cost} gold"
             return False
         self.gold -= cost
         fused = Unit(self.faction, recipe["base"], unit.x, unit.y, recipe=recipe_id)
-        fused.level = max(unit.level, partner.level)  # Both are at most level 3, so the result is too
-        fused.spent = unit.spent + partner.spent + cost
-        first, second = self.units.index(unit), self.units.index(partner)
-        self.units.remove(unit)
-        self.units.remove(partner)
-        self.units.insert(min(first, second), fused)
+        fused.level = max(member.level for member in members)  # All are at most level 3, so the result is too
+        fused.spent = sum(member.spent for member in members) + cost
+        positions = [(self.units.index(member), member) for member in members]
+        for _, member in positions:
+            self.units.remove(member)
+        self.units.insert(min(position for position, _ in positions), fused)
         self.all_units.append(fused)
         self.selected_unit = fused
-        self.history.record(("combine", unit, partner, fused, first, second))
+        self.history.record(("combine", fused, positions))
         self.sound_events.append(("cash",))
         self.message = f"{recipe['name']} formed  -{cost} gold"
         self._log(f"{recipe['name']} combined  -{cost}", NOTE)
@@ -333,6 +409,8 @@ class Game:
             warnings.append("BOSS")
         if self.next_round_has_flyers():
             warnings.append("FLYERS")
+            if not any(unit.kind in AIR_ROLES for unit in self.units):
+                warnings.append("NO AIR")  # Flyers are coming and nothing placed can shoot them
         return warnings
 
     def next_round_has_flyers(self):
@@ -475,12 +553,18 @@ class Game:
         for unit in self.units:
             shots = unit.update(dt, self.enemies)
             if shots:
-                self.sound_events.append(("fire", unit.faction, unit.kind))
+                self.sound_events.append(("fire", unit.faction, unit.kind, unit.recipe))
                 self.projectiles.extend(shots)
+        charged_before = {id(unit) for unit in self.units if unit.charged}
         for projectile in self.projectiles:
             projectile.update(dt, self.enemies, self.zones, self.effects)
+        for unit in self.units:  # A unit whose kills filled its charge this step announces it
+            if unit.charged and id(unit) not in charged_before:
+                self.effects.append(Floater(unit.x, unit.y, "CHARGED", CHARGE_COLOUR, life=1.2))
+                self.sound_events.append(("charged",))
         self.projectiles = [p for p in self.projectiles if not p.done]
         self.effects = [puff for puff in self.effects if puff.update(dt)]
+        self.corpses = [corpse for corpse in self.corpses if corpse.update(dt)]
 
     def _resolve_deaths(self):
         """Pay out and count the enemies killed this step. Leakers were already paid for by their lives."""
@@ -497,6 +581,8 @@ class Game:
                 self.hitmark = 0.15
                 self._log(f"{enemy.spec['name']} eliminated  +{reward}", NEUTRAL)
                 self.effects.append(Puff(enemy.x, enemy.y, (230, 230, 210), size=3.0, life=0.4))
+                self.corpses.append(Corpse(enemy))
+                self.sound_events.append(("death", enemy.faction))
         self.enemies = still_alive
 
     def _check_round_cleared(self):
@@ -616,7 +702,7 @@ class Game:
 
     def report(self):
         """What the stats screen shows: the best three damage dealers and the three most common leakers."""
-        damage = [(f"{UNIT_TYPES[u.faction][u.kind]['name']} L{u.level}", round(u.damage), u.kills)
+        damage = [(f"{u.display_name} L{u.level}", round(u.damage), u.kills)
                   for u in self.all_units if u.damage > 0]
         damage.sort(key=lambda row: -row[1])
         return {"round": self.wave, "kills": self.kills, "damage": damage[:3], "leaks": self.leaks.most_common(3)}

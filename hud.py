@@ -4,9 +4,11 @@ import textwrap
 import pygame
 
 import story
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_COLS, MAP_ROWS, UNIT_TYPES, ROLES, START_LIVES, ULTIMATES,
-                    AIR_ROLES, REINFORCE_MAX, START_COLOUR, END_COLOUR, SELL_REFUND, MAX_UNITS, RESPEC_COST,
-                    SELL_CONFIRM_SECONDS, AUTO_START_SECONDS, MAP_BUILD_SECONDS)
+from camera import SCALE
+from keymap import label
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, MAP_COLS, MAP_ROWS, UNIT_TYPES, ROLES, START_LIVES,
+                    AIR_ROLES, REINFORCE_MAX, START_COLOUR, END_COLOUR, SELL_REFUND, RESPEC_COST,
+                    SELL_CONFIRM_SECONDS, AUTO_START_SECONDS, MAP_BUILD_SECONDS, DAMAGE_NAMES, CHARGE_KILLS)
 from draw_kit import (HUD_EDGE, ACCENT, WHITE, GREY, RED, GREEN, DIM, BUTTON, draw_text, draw_panel, dim_colour,
                       shade)
 from sprites import unit_sprite
@@ -56,15 +58,17 @@ def _draw_preview(screen, game, fonts):
     for i, tag in enumerate(game.next_round_warnings()):
         tag_rect = pygame.Rect(TAG_X, PREVIEW_RECT.y + i * 26, 84, 22)
         draw_panel(screen, tag_rect, slant=6)
-        draw_text(screen, fonts["tiny"], tag, tag_rect.center, RED if tag == "BOSS" else (120, 200, 255), anchor="center")
+        colour = RED if tag in ("BOSS", "NO AIR") else (120, 200, 255)
+        draw_text(screen, fonts["tiny"], tag, tag_rect.center, colour, anchor="center")
 
 
 def _draw_points(screen, game, fonts):
     draw_panel(screen, POINTS_RECT, accent=True)
     draw_text(screen, fonts["tiny"], "GOLD", (POINTS_RECT.x + 26, POINTS_RECT.y + 12), GREY)
     draw_text(screen, fonts["mid"], f"$ {game.gold}", (POINTS_RECT.x + 26, POINTS_RECT.y + 40), ACCENT, anchor="midleft")
-    draw_text(screen, fonts["tiny"], f"UNITS {len(game.units)}/{MAX_UNITS}", (POINTS_RECT.right - 16, POINTS_RECT.y + 40),
-          RED if len(game.units) >= MAX_UNITS else GREY, anchor="midright")
+    cap = game.unit_cap()
+    draw_text(screen, fonts["tiny"], f"UNITS {len(game.units)}/{cap}", (POINTS_RECT.right - 16, POINTS_RECT.y + 40),
+          RED if len(game.units) >= cap else GREY, anchor="midright")
     if game.gain_life > 0:
         draw_text(screen, fonts["small"], f"+{game.gain}", (POINTS_RECT.right - 16, POINTS_RECT.y + 14),
               GREEN, anchor="topright")
@@ -92,8 +96,13 @@ def _draw_radar(screen, game, fonts, selected):
     pygame.draw.rect(screen, START_COLOUR, (box.x + start[0] * sx - 3, box.y + start[1] * sy - 3, 6, 6))
     pygame.draw.rect(screen, END_COLOUR, (box.x + end[0] * sx - 3, box.y + end[1] * sy - 3, 6, 6))
     for unit in game.units:
+        # Shape as well as colour: humans are squares and zombies diamonds, so the radar reads without colour
         colour = (110, 170, 255) if unit.faction == "human" else (190, 120, 240)
-        pygame.draw.rect(screen, colour, (box.x + unit.x * sx - 2, box.y + unit.y * sy - 2, 4, 4))
+        x, y = box.x + unit.x * sx, box.y + unit.y * sy
+        if unit.faction == "human":
+            pygame.draw.rect(screen, colour, (x - 2, y - 2, 4, 4))
+        else:
+            pygame.draw.polygon(screen, colour, [(x, y - 3), (x + 3, y), (x, y + 3), (x - 3, y)])
     if not game.wave_active and game.status == "playing" and game.next_round_has_flyers():
         # The flyers' straight line from start to end, drawn as a dotted lane
         sx0, sy0 = box.x + start[0] * sx, box.y + start[1] * sy
@@ -108,6 +117,7 @@ def _draw_radar(screen, game, fonts, selected):
     if selected is not None:
         pygame.draw.circle(screen, ACCENT, (int(box.x + selected.x * sx), int(box.y + selected.y * sy)), 6, 1)
     pygame.draw.rect(screen, HUD_EDGE, box, 1)
+    pygame.draw.rect(screen, (10, 12, 16), (box.x + 1, box.y + 1, 50, 12))  # Backing, so the label reads over the map
     draw_text(screen, fonts["tiny"], "RADAR", (box.x + 6, box.y + 4), GREY)
 
 
@@ -143,22 +153,44 @@ def _draw_hotbar(screen, game, fonts):
         screen.blit(icon, (rect.x + 14, rect.y + 17))
         draw_text(screen, fonts["tiny"], str(i + 1), (rect.x + 8, rect.y + 6), ACCENT)
         if role in AIR_ROLES:  # Can hit flying enemies
-            draw_text(screen, fonts["tiny"], "AIR", (rect.right - 8, rect.bottom - 6), (120, 200, 255), anchor="bottomright")
-        draw_text(screen, fonts["tiny"], spec["short"], (rect.x + 44, rect.y + 12), WHITE)
+            draw_text(screen, fonts["tiny"], "AIR", (rect.x + 8, rect.bottom - 6), (120, 200, 255), anchor="bottomleft")
+        name = fonts["tiny"].render(spec["short"], True, WHITE)
+        room = rect.right - (rect.x + 44) - 4  # Long names are squeezed to fit the slot
+        if name.get_width() > room:
+            name = pygame.transform.smoothscale(name, (room, name.get_height()))
+        screen.blit(name, (rect.x + 44, rect.y + 12))
         affordable = game.gold >= spec["cost"]
         draw_text(screen, fonts["tiny"], f"$ {spec['cost']}", (rect.x + 44, rect.y + 42),
               GREEN if affordable else RED)
+
+
+def tutorial_line(game):
+    """Guidance for the first round, until it starts. None once the run is under way."""
+    if game.wave > 0 or game.wave_active or game.status != "playing":
+        return None
+    if not game.units:
+        return "TIP: click a tile to build your first unit. Keys 1-8 choose the type"
+    return "TIP: place a few more units, then press SPACE to start round 1 early"
 
 
 def _draw_hint(screen, game, fonts):
     if game.message:
         text, colour = game.message, ACCENT
     elif game.selected_unit is not None:
-        text, colour = "U upgrade    A / B ultimate at level 3    C combine    X sell (twice)    Right-click deselect", GREY
+        text = (f"{label('upgrade')} upgrade    {label('ultimate_a')} / {label('ultimate_b')} ultimate at level 3    "
+                f"{label('combine')} combine    {label('sell')} sell (twice)    Right-click deselect")
+        colour = GREY
+    elif tutorial_line(game):
+        text, colour = tutorial_line(game), ACCENT
     elif game.wave_active:
         text, colour = "Hold the route. Click a unit to upgrade it", GREY
     else:
-        text, colour = "Click a tile to build    1-7 pick unit    SPACE start now    H help    Esc quit", GREY
+        text = f"Click a tile to build    1-8 pick unit    {label('start')} start now    {label('help')} help    Esc quit"
+        colour = GREY
+    width, height = fonts["small"].size(text)
+    strip = pygame.Surface((width + 28, height + 8), pygame.SRCALPHA)
+    strip.fill((10, 12, 16, 170))  # A translucent strip, so the hint reads over the map
+    screen.blit(strip, strip.get_rect(midtop=(SCREEN_WIDTH // 2, HINT_Y - 4)))
     draw_text(screen, fonts["small"], text, (SCREEN_WIDTH // 2, HINT_Y), colour, anchor="midtop")
 
 
@@ -188,6 +220,8 @@ def _draw_unit_header(screen, unit, fonts):
     """Name, level pips, and the combo group and squad bonuses."""
     draw_text(screen, fonts["tiny"], "UNIT", (PANEL.x + 14, PANEL.y + 10), GREY)
     draw_text(screen, fonts["mid"], unit.display_name, (PANEL.x + 14, PANEL.y + 26))
+    if unit.form_name:  # A combined unit's ultimate form, under its name
+        draw_text(screen, fonts["tiny"], f"Form: {unit.form_name}", (PANEL.x + 14, PANEL.y + 46), ACCENT)
 
     for i in range(4):  # Level pips
         pip = pygame.Rect(PANEL.x + 14 + i * 36, PANEL.y + 62, 30, 8)
@@ -211,7 +245,9 @@ def _draw_unit_stats(screen, unit, fonts):
     _stat_bar(screen, fonts, PANEL.y + 120, "RATE", f"{s['rate'] * unit.buff:.2f}/s", s["rate"] * unit.buff / 6)
     _stat_bar(screen, fonts, PANEL.y + 144, "RANGE", f"{s['range']:.1f}", s["range"] / 12)
 
-    specials = []
+    specials = [f"{DAMAGE_NAMES[s['dtype']]} shots"]
+    if unit.can_charge:  # The charge meter: it fills with kills, and is full until the charged shot
+        specials.append("CHARGED" if unit.charged else f"Charge {unit.kill_meter}/{CHARGE_KILLS}")
     if s["splash"] > 0:
         specials.append(f"Blast {s['splash']:.1f}")
     if s["pierce"]:
@@ -222,12 +258,27 @@ def _draw_unit_stats(screen, unit, fonts):
         specials.append(f"Aura {s['aura'][0]:.1f}t x{s['aura'][1]:.2f}")
     if s["slow"]:
         specials.append(f"Slow {int((1 - s['slow'][0]) * 100)}%")
-    draw_text(screen, fonts["tiny"], "   ".join(specials) or "Single target", (PANEL.x + 14, PANEL.y + 178), GREY)
+    # The specials wrap onto up to two lines, so a long list (a combined unit's) stays inside the panel
+    lines, current = [], ""
+    for item in specials or ["Single target"]:
+        if current and len(current) + len(item) + 3 > 36:
+            lines.append(current)
+            current = item
+        else:
+            current = f"{current}   {item}" if current else item
+    lines.append(current)
+    for i, line in enumerate(lines[:2]):
+        draw_text(screen, fonts["tiny"], line, (PANEL.x + 14, PANEL.y + 178 + i * 11), GREY)
 
     if unit.level == 4:
         draw_text(screen, fonts["tiny"], unit.ultimate["desc"], (PANEL.x + 14, PANEL.y + 200), ACCENT)
+    elif unit.recipe and unit.level > 1:  # The combined unit's own upgrade so far
+        step = unit.combo_kit["path"][unit.level - 2]
+        for i, line in enumerate(textwrap.wrap(f"{step['name']}: {step['desc']}", 42)[:2]):
+            draw_text(screen, fonts["tiny"], line, (PANEL.x + 14, PANEL.y + 200 + i * 15), ACCENT)
     elif unit.recipe_info:
-        draw_text(screen, fonts["tiny"], unit.recipe_info["desc"], (PANEL.x + 14, PANEL.y + 200), ACCENT)
+        for i, line in enumerate(textwrap.wrap(unit.recipe_info["desc"], 42)[:2]):
+            draw_text(screen, fonts["tiny"], line, (PANEL.x + 14, PANEL.y + 200 + i * 15), ACCENT)
 
 
 def _draw_ultimate_switch(screen, game, unit, fonts):
@@ -242,7 +293,7 @@ def _draw_ultimate_switch(screen, game, unit, fonts):
     draw_panel(screen, UPGRADE_RECT, fill=(36, 84, 46) if affordable else BUTTON, slant=8)
     draw_text(screen, fonts["small"], label, UPGRADE_RECT.center, anchor="center")
     other = 1 - unit.ultimate_index
-    switch = ULTIMATES[unit.faction][unit.kind][other]
+    switch = unit.ultimate_options[other]
     cost_text = f"$ {round(unit.cost * RESPEC_COST)}" if not game.wave_active else "between rounds"
     draw_panel(screen, ULT_RECTS[1], fill=(70, 52, 104) if not game.wave_active else BUTTON, slant=8)
     draw_text(screen, fonts["small"], f"SWITCH [{'AB'[other]}]  {switch['name']}",
@@ -275,8 +326,8 @@ def _draw_combine(screen, game, unit, fonts):
         draw_panel(screen, COMBINE_RECT, fill=BUTTON, slant=8)
         draw_text(screen, fonts["tiny"], "COMBINE [C]: needs a unit next to it", COMBINE_RECT.center, anchor="center")
         return
-    partner, _, recipe = option
-    cost = game.combine_cost(unit, partner)
+    partners, _, recipe = option
+    cost = game.combine_cost(unit, *partners)
     affordable = game.gold >= cost
     draw_panel(screen, COMBINE_RECT, fill=(40, 70, 110) if affordable else BUTTON, slant=8)
     draw_text(screen, fonts["small"], f"COMBINE [C]  {recipe['name']}",
@@ -293,7 +344,7 @@ def _draw_upgrade_or_ultimate(screen, game, unit, fonts):
         draw_text(screen, fonts["small"], f"UPGRADE  [U]   $ {cost}", UPGRADE_RECT.center, anchor="center")
     elif unit.level == 3:
         draw_text(screen, fonts["tiny"], "CHOOSE AN ULTIMATE", (PANEL.x + 14, PANEL.y + 222), ACCENT)
-        for i, (rect, ult) in enumerate(zip(ULT_RECTS, ULTIMATES[unit.faction][unit.kind])):
+        for i, (rect, ult) in enumerate(zip(ULT_RECTS, unit.ultimate_options)):
             draw_panel(screen, rect, fill=(70, 52, 104), slant=8)
             draw_text(screen, fonts["small"], f"[{'AB'[i]}]  {ult['name']}", (rect.x + 12, rect.y + 6))
             draw_text(screen, fonts["tiny"], ult["desc"], (rect.x + 12, rect.y + 30), GREY)
@@ -346,7 +397,7 @@ def _draw_overrun(screen, game, fonts):
         draw_text(screen, fonts["small"], line, (cx, 506 + i * 22), (220, 210, 170), anchor="center")
 
 
-def draw_hud(screen, game, speed, fonts, pointer=None, audio=""):
+def draw_hud(screen, game, speed, fonts, pointer=None, audio="", camera=None):
     _draw_round(screen, game, fonts, speed)
     _draw_preview(screen, game, fonts)
     _draw_points(screen, game, fonts)
@@ -363,6 +414,11 @@ def draw_hud(screen, game, speed, fonts, pointer=None, audio=""):
             if rect.collidepoint(pointer):
                 draw_tooltip(screen, fonts, game, role, pointer)
                 break
+    if pointer and game.status == "playing" and camera is not None:
+        hotbar_hover = any(rect.collidepoint(pointer) for rect in ROLE_RECTS.values())
+        enemy = None if hotbar_hover else _enemy_under(camera, game, pointer)
+        if enemy is not None:
+            draw_enemy_tip(screen, fonts, enemy, pointer)
     if pointer and game.status == "playing":
         _draw_reticle(screen, pointer)
     if game.hitmark > 0:
@@ -375,12 +431,52 @@ def draw_hud(screen, game, speed, fonts, pointer=None, audio=""):
         _draw_overrun(screen, game, fonts)
 
 
+def _enemy_under(camera, game, pointer):
+    """The enemy drawn closest to the pointer, within a few pixels, or None."""
+    best, best_d = None, 18
+    for enemy in game.enemies:
+        if not enemy.alive:
+            continue
+        point = camera.project(enemy.x, enemy.y, enemy.spec.get("height", 1.0) * 0.5)
+        if point is None:
+            continue
+        d = math.hypot(point[0] * SCALE - pointer[0], point[1] * SCALE - pointer[1])
+        if d < best_d:
+            best, best_d = enemy, d
+    return best
+
+
+def draw_enemy_tip(screen, fonts, enemy, pointer):
+    """Hover card for an enemy on the battlefield: what it is, how much is left, and what it costs to let it through."""
+    spec = enemy.spec
+    lives = "life" if spec["leak"] == 1 else "lives"
+    rows = [spec["name"] + ("  (flying)" if enemy.flying else ""),
+            f"HP {max(0.0, enemy.hp):.0f} / {enemy.max_hp:.0f}",
+            f"Speed {spec['speed']:g} tiles/s" + (f"   Armour {spec['armour'] * 100:.0f}%" if spec.get("armour") else ""),
+            f"Reward $ {spec['reward']}   Reaching the end costs {spec['leak']} {lives}"]
+    vs = spec.get("vs", {})
+    weak = [DAMAGE_NAMES[t] for t, factor in vs.items() if factor > 1]
+    resist = [DAMAGE_NAMES[t] for t, factor in vs.items() if factor < 1]
+    if weak or resist:
+        rows.append("Weak to " + (", ".join(weak) or "nothing") + "   Resists " + (", ".join(resist) or "nothing"))
+    width = 300
+    height = 12 + 22 * len(rows)
+    x = min(max(8, pointer[0] + 16), SCREEN_WIDTH - width - 8)
+    y = min(max(8, pointer[1] + 16), SCREEN_HEIGHT - height - 8)
+    box = pygame.Rect(x, y, width, height)
+    draw_panel(screen, box, fill=(20, 22, 28), accent=True)
+    for i, row in enumerate(rows):
+        draw_text(screen, fonts["small"] if i == 0 else fonts["tiny"], row, (box.x + 12, box.y + 10 + i * 22),
+                  ACCENT if i == 0 else WHITE)
+
+
 def draw_tooltip(screen, fonts, game, role, pointer):
     """Hover card for a unit in the hotbar: cost and stats, and whether it can hit flyers."""
     spec = UNIT_TYPES[game.faction][role]
     rows = [spec["name"],
             f"Cost $ {spec['cost']}   Damage {spec['damage']:g}   Rate {spec['rate']:g}/s",
-            f"Range {spec['range']:g}" + (f"   Blast {spec['splash']:g}" if spec.get("splash") else ""),
+            f"Range {spec['range']:g}" + (f"   Blast {spec['splash']:g}" if spec.get("splash") else "")
+            + f"   {DAMAGE_NAMES[spec['dtype']]} shots",
             "Flying enemies only" if spec.get("air_only") else
             "Can hit flying enemies" if role in AIR_ROLES else "Ground only"]
     width = 300

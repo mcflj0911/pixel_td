@@ -63,7 +63,7 @@ def combine_round(game):
         if unit not in game.units:
             continue
         option = game.combine_option(unit)
-        if option is None or game.gold < game.combine_cost(unit, option[0]) + RESERVE:
+        if option is None or game.gold < game.combine_cost(unit, *option[0]) + RESERVE:
             continue
         game.selected_unit = unit
         game.combine()

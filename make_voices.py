@@ -14,6 +14,7 @@ LINES = {
     "flame": "Flamethrower, lighting it up",
     "artillery": "Mortar, shells away",
     "flak": "Flak gun, sky's on fire",
+    "rocket": "Rocketeer, missile away",
 }
 
 SCRIPT = (

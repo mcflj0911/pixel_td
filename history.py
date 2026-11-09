@@ -10,8 +10,9 @@ class BuildHistory:
         self._entries = []  # Placements and sales this build phase, newest last
 
     def record(self, entry):
-        """Remember a ("place", unit), ("sell", unit, index) or ("combine", unit, partner, fused, index, partner_index)
-        entry. Only the last UNDO_STEPS are kept."""
+        """Remember a ("place", unit), ("sell", unit, index), ("combine", fused, [(index, member), ...]) or
+        ("move", unit, (x, y)) entry.
+        Only the last UNDO_STEPS are kept."""
         self._entries.append(entry)
         del self._entries[:-UNDO_STEPS]
 
@@ -39,18 +40,25 @@ class BuildHistory:
                 game.gold += refund
                 game.message = f"Undid placement, refunded {refund}"
                 return True
+            if entry[0] == "move":
+                _, unit, (x, y) = entry
+                if unit not in game.units:
+                    continue  # Sold since: look at the one before it
+                unit.x, unit.y = x, y
+                game.message = "Move undone"
+                return True
             if entry[0] == "combine":
-                _, unit, partner, fused, index, partner_index = entry
+                _, fused, originals = entry
                 if fused not in game.units:
                     continue  # Already sold: look at the one before it
-                # The refund is what was put into the result after the two units: the fee, and any upgrades since
-                refund = fused.spent - unit.spent - partner.spent
+                # The refund is what was put into the result after its members: the fee, and any upgrades since
+                refund = fused.spent - sum(member.spent for _, member in originals)
                 game.units.remove(fused)
                 game.all_units.remove(fused)
                 if game.selected_unit is fused:
                     game.selected_unit = None
-                for position, original in sorted(((index, unit), (partner_index, partner))):
-                    game.units.insert(min(position, len(game.units)), original)
+                for position, member in sorted(originals, key=lambda item: item[0]):
+                    game.units.insert(min(position, len(game.units)), member)
                 game.gold += refund
                 game.message = f"Combine undone, refunded {refund}"
                 return True

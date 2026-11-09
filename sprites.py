@@ -1,5 +1,7 @@
 import pygame
 
+from config import COMBINATIONS, SHOT_COLOURS
+
 # Sprites are drawn on a 16x24 pixel canvas and scaled to their size on screen
 
 UNIT_BODY = {"human": (66, 104, 186), "zombie": (96, 52, 124)}
@@ -34,11 +36,21 @@ def _outlined(s):
     return out
 
 
-def unit_sprite(faction, kind, level, ult_index):
-    key = ("unit", faction, kind, level, ult_index)
+def unit_sprite(faction, kind, level, ult_index, recipe=None, frame=0):
+    key = ("unit", faction, kind, level, ult_index, recipe, frame)
     if key not in _cache:
-        _cache[key] = _outlined(_make_unit(faction, kind, level, ult_index))
+        _cache[key] = _outlined(_make_unit(faction, kind, level, ult_index, recipe, frame))
     return _cache[key]
+
+
+def _legs(s, frame):
+    """Two legs. Frame 1 spreads them, so a walking figure alternates between the two frames."""
+    if frame:
+        pygame.draw.rect(s, DARK, (4, 16, 3, 6))
+        pygame.draw.rect(s, DARK, (10, 16, 3, 6))
+    else:
+        pygame.draw.rect(s, DARK, (5, 16, 3, 6))
+        pygame.draw.rect(s, DARK, (9, 16, 3, 6))
 
 
 def _weapon(s, faction, kind):
@@ -67,16 +79,138 @@ def _weapon(s, faction, kind):
         pygame.draw.rect(s, (84, 96, 84), (1, 7, 3, 7))  # Stand on the back
         pygame.draw.rect(s, DARK, (9, 9, 6, 1))  # Twin barrels pointing up
         pygame.draw.rect(s, DARK, (9, 11, 6, 1))
+    elif kind == "rocket":
+        if faction == "human":
+            pygame.draw.rect(s, DARK, (1, 4, 3, 8))  # Launch tube on the shoulder
+            pygame.draw.rect(s, (220, 60, 50), (1, 3, 3, 1))  # Warhead tip
+        else:
+            pygame.draw.ellipse(s, (150, 200, 110), (0, 7, 6, 7))  # Spore sac on the back
+            pygame.draw.rect(s, (90, 130, 70), (2, 9, 2, 1))
 
 
-def _make_unit(faction, kind, level, ult_index):
+# --- COMBINED FORMS ---
+# A combined unit keeps its role's weapon and gains the add-ons in its recipe's `form`. Humans become mechanical:
+# a steel chassis with plating, treads, turrets and exhausts. Zombies mutate: a fleshy body with growths.
+METAL = (92, 100, 116)
+METAL_LIGHT = (160, 170, 186)
+FLESH = (112, 74, 116)  # The bulked-up zombie body
+BONE = (232, 222, 190)
+
+
+def _addon_shield(s):
+    pygame.draw.rect(s, (120, 150, 190), (1, 6, 3, 9))  # Plate held in front
+    pygame.draw.rect(s, (200, 220, 240), (1, 6, 3, 1))
+
+
+def _addon_rocket_pods(s):
+    pygame.draw.rect(s, (120, 124, 134), (11, 4, 4, 3))
+    pygame.draw.rect(s, (220, 60, 50), (14, 4, 1, 3))  # Warheads
+
+
+def _addon_antenna(s):
+    pygame.draw.line(s, DARK, (2, 0), (2, 4))
+    s.set_at((2, 0), (255, 80, 80))  # Blinking tip
+
+
+def _addon_scanner(s):
+    pygame.draw.rect(s, (120, 240, 255), (5, 3, 6, 1))  # Visor
+
+
+def _addon_turret_head(s):
+    pygame.draw.rect(s, DARK, (4, 0, 8, 2))  # Turret on the helmet
+    pygame.draw.rect(s, DARK, (11, 0, 3, 1))
+
+
+def _addon_treads(s):
+    pygame.draw.rect(s, (46, 46, 54), (3, 17, 11, 6))  # Tracks over the legs
+    for x in (4, 8, 12):
+        s.set_at((x, 19), (110, 110, 120))  # Wheels
+
+
+def _addon_twin_cannon(s):
+    pygame.draw.rect(s, DARK, (13, 9, 3, 1))
+    pygame.draw.rect(s, DARK, (13, 11, 3, 1))
+
+
+def _addon_jetpack(s):
+    pygame.draw.rect(s, (110, 116, 126), (2, 8, 2, 8))
+    pygame.draw.rect(s, (255, 150, 60), (2, 16, 2, 1))  # Flame
+
+
+def _addon_exhaust(s):
+    pygame.draw.rect(s, (255, 150, 60), (9, 18, 2, 2))
+    s.set_at((10, 16), (180, 180, 180))  # Smoke
+
+
+def _addon_armour(s):
+    pygame.draw.rect(s, METAL_LIGHT, (5, 9, 6, 6))  # Chest plate, over the body
+
+
+def _addon_bloat(s):
+    pygame.draw.ellipse(s, (150, 176, 110), (1, 10, 7, 8))  # Swollen growth on the side
+    pygame.draw.rect(s, (190, 210, 150), (2, 11, 2, 2))
+
+
+def _addon_spikes(s):
+    for x, y in ((3, 7), (6, 6), (9, 6), (12, 7)):
+        s.set_at((x, y), BONE)
+
+
+def _addon_tendril(s):
+    pygame.draw.lines(s, (120, 200, 80), False, [(12, 10), (15, 6), (14, 2)], 1)
+
+
+def _addon_eye(s):
+    s.set_at((8, 3), (230, 230, 230))  # An extra eye on the forehead
+    s.set_at((8, 4), (200, 30, 40))
+
+
+def _addon_extra_arm(s):
+    pygame.draw.lines(s, ZOMBIE_SKIN, False, [(4, 10), (1, 13), (2, 16)], 2)
+
+
+def _addon_horns(s):
+    for x, y in ((4, 1), (3, 0), (11, 1), (12, 0)):
+        s.set_at((x, y), BONE)
+
+
+def _addon_maw(s):
+    pygame.draw.rect(s, (120, 20, 40), (6, 5, 4, 2))  # Open mouth
+    s.set_at((6, 5), (240, 240, 240))
+    s.set_at((9, 5), (240, 240, 240))
+
+
+def _addon_tumor(s):
+    pygame.draw.circle(s, (110, 40, 110), (12, 15), 2)
+    s.set_at((11, 14), (170, 100, 170))
+
+
+ADDONS = {
+    "shield": _addon_shield, "rocket_pods": _addon_rocket_pods, "antenna": _addon_antenna,
+    "scanner": _addon_scanner, "turret_head": _addon_turret_head, "treads": _addon_treads,
+    "twin_cannon": _addon_twin_cannon, "jetpack": _addon_jetpack, "exhaust": _addon_exhaust,
+    "armour": _addon_armour, "bloat": _addon_bloat, "spikes": _addon_spikes, "tendril": _addon_tendril,
+    "eye": _addon_eye, "extra_arm": _addon_extra_arm, "horns": _addon_horns, "maw": _addon_maw,
+    "tumor": _addon_tumor,
+}
+
+
+def _make_unit(faction, kind, level, ult_index, recipe=None, frame=0):
     s = _canvas()
     _shadow(s)
+    form = COMBINATIONS[faction][recipe]["form"] if recipe else ()
     body = UNIT_BODY[faction]
-    pygame.draw.rect(s, DARK, (5, 16, 3, 6))  # Legs
-    pygame.draw.rect(s, DARK, (9, 16, 3, 6))
-    pygame.draw.rect(s, body, (4, 8, 8, 9))  # Torso
-    pygame.draw.rect(s, UNIT_TRIM[faction], (4, 8, 8, 1))
+    trim = UNIT_TRIM[faction]
+    if recipe:
+        # The trim takes the colour of the role's shots, so each combination reads at a glance
+        body = METAL if faction == "human" else FLESH
+        trim = SHOT_COLOURS[faction][COMBINATIONS[faction][recipe]["base"]]
+    _legs(s, frame)
+    if recipe and faction == "zombie":
+        pygame.draw.rect(s, body, (3, 7, 10, 10))  # A bulkier body
+    else:
+        pygame.draw.rect(s, body, (4, 8, 8, 9))  # Torso
+    pygame.draw.rect(s, trim, (4, 8, 8, 1))
     if faction == "human":
         pygame.draw.rect(s, SKIN, (5, 3, 6, 5))  # Face
         pygame.draw.rect(s, (62, 74, 52), (4, 1, 8, 3))  # Helmet
@@ -85,6 +219,8 @@ def _make_unit(faction, kind, level, ult_index):
         s.set_at((6, 4), DARK)  # Eyes
         s.set_at((9, 4), DARK)
     _weapon(s, faction, kind)
+    for addon in form:
+        ADDONS[addon](s)
     # One pip on the chest per upgrade. The ultimate level gets a glowing outline
     for i in range(min(level, 4) - 1):
         pygame.draw.rect(s, (255, 226, 110), (5 + i * 2, 13, 1, 1))
@@ -93,14 +229,14 @@ def _make_unit(faction, kind, level, ult_index):
     return s
 
 
-def enemy_sprite(faction, kind):
-    key = ("enemy", faction, kind)
+def enemy_sprite(faction, kind, frame=0):
+    key = ("enemy", faction, kind, frame)
     if key not in _cache:
-        _cache[key] = _outlined(_make_enemy(faction, kind))
+        _cache[key] = _outlined(_make_enemy(faction, kind, frame))
     return _cache[key]
 
 
-def _make_enemy(faction, kind):
+def _make_enemy(faction, kind, frame=0):
     if kind == "crow":
         return _make_crow()
     if kind == "drone":
@@ -109,8 +245,7 @@ def _make_enemy(faction, kind):
     _shadow(s)
     body = ENEMY_BODY[faction]
     big = kind in ("brute", "heavy", "boss")
-    pygame.draw.rect(s, DARK, (5, 16, 3, 6))
-    pygame.draw.rect(s, DARK, (9, 16, 3, 6))
+    _legs(s, frame)
     if big:
         pygame.draw.rect(s, body, (2, 6, 12, 11))
     else:

@@ -4,6 +4,8 @@ Screens: the title (with the demo battle behind it), the briefing card before a 
 the battle sits at most one overlay at a time: the quit prompt, the help (F1) or the story log (L). Pause (P) is
 separate: it freezes the battle, and clicks do nothing while it is on.
 """
+import math
+
 import pygame
 
 from camera import Camera
@@ -18,8 +20,9 @@ from save import save_path, autosave_path
 from screens import draw_title, draw_quit_prompt, draw_pause, draw_help, draw_briefing, draw_log
 from settings import (load_settings, save_settings, load_records, save_records, best_round, record_round,
                       TEXT_SCALES, MAP_CHOICES)
+from keymap import action_for, apply_settings
 from sounds import Sounds
-from ui import ui_action, HELP_TAB_RECTS
+from ui import ui_action, HELP_TAB_RECTS, HELP_VIEW, HELP_SCROLL_STEP
 
 ROLE_KEYS = {getattr(pygame, f"K_{i + 1}"): role for i, role in enumerate(ROLES)}
 SLOT_KEYS = {getattr(pygame, f"K_{i + 1}"): i + 1 for i in range(SAVE_SLOTS)}
@@ -68,6 +71,7 @@ def _key(event, *keys):
 class App:
     def __init__(self):
         self.settings = load_settings()
+        apply_settings(self.settings["keys"])
         self.window = open_window(self.settings["fullscreen"])
         pygame.display.set_caption("Pixel TD")
         self.canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -88,11 +92,17 @@ class App:
         self.briefing = None  # The faction whose opening story card is showing, before the run starts
         self.speed_index = 0
         self.hover = None  # The tile under the pointer, for the battle view
+        self._press = None  # The unit the mouse was pressed on between rounds: it may be dragged to another tile
+        self._press_point = None  # Where that press began, on the canvas
+        self._dragging = False  # True once the pointer has moved far enough from the press to count as a drag
+        self._drag_cell = None  # The tile the dragged unit would move to
         self.dest = (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)  # Where the canvas is drawn in the window
         self.running = True
         self.overlay = None  # "quit" (Esc asks first, so a stray key press does not lose a run), "help" or "log"
         self.paused = False  # P
         self.help_tab = 0  # Which tab of the help page is showing: controls, combinations or units
+        self.help_scroll = 0  # How far down that tab the page is scrolled
+        self.help_max = 0  # The most it can scroll, set when the page is drawn
 
     # --- Shared state ---
 
@@ -164,18 +174,38 @@ class App:
             self._battle_event(event)
 
     def _help_event(self, event):
-        """H, F1 or Esc close the help page. Left and right, or a click, change the tab."""
+        """H, F1 or Esc close the help page. Left and right, or a click, change the tab. Up and down, Page Up and
+        Page Down, or the mouse wheel scroll the tab."""
         if _key(event, pygame.K_h, pygame.K_F1, pygame.K_ESCAPE):
             self.overlay = None
         elif _key(event, pygame.K_LEFT):
-            self.help_tab = (self.help_tab - 1) % len(HELP_TAB_RECTS)
+            self._help_tab_to((self.help_tab - 1) % len(HELP_TAB_RECTS))
         elif _key(event, pygame.K_RIGHT):
-            self.help_tab = (self.help_tab + 1) % len(HELP_TAB_RECTS)
+            self._help_tab_to((self.help_tab + 1) % len(HELP_TAB_RECTS))
+        elif _key(event, pygame.K_UP):
+            self._help_scroll_by(-HELP_SCROLL_STEP)
+        elif _key(event, pygame.K_DOWN):
+            self._help_scroll_by(HELP_SCROLL_STEP)
+        elif _key(event, pygame.K_PAGEUP):
+            self._help_scroll_by(-(HELP_VIEW.h - HELP_SCROLL_STEP))
+        elif _key(event, pygame.K_PAGEDOWN):
+            self._help_scroll_by(HELP_VIEW.h - HELP_SCROLL_STEP)
+        elif event.type == pygame.MOUSEWHEEL:
+            self._help_scroll_by(-event.y * HELP_SCROLL_STEP)  # Wheel up (positive) scrolls the page up
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             point = to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT)
             for i, rect in enumerate(HELP_TAB_RECTS):
                 if rect.collidepoint(point):
-                    self.help_tab = i
+                    self._help_tab_to(i)
+
+    def _help_tab_to(self, tab):
+        """Show another help tab, from its top."""
+        self.help_tab = tab
+        self.help_scroll = 0
+
+    def _help_scroll_by(self, delta):
+        """Scroll the help tab, but not past its top or its end (the end is known once the page is drawn)."""
+        self.help_scroll = min(max(self.help_scroll + delta, 0), self.help_max)
 
     def _quit_prompt_event(self, event):
         if _key(event, pygame.K_y):
@@ -261,7 +291,12 @@ class App:
         elif event.type == pygame.KEYDOWN:
             self._battle_key(event.key)
         elif event.type == pygame.MOUSEMOTION:
-            self.hover = self.camera.screen_to_tile(*to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT))
+            point = to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT)
+            self.hover = self.camera.screen_to_tile(*point)
+            if self._press is not None:
+                self._drag_to(point)
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self._press is not None:
+            self._release(to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT))
         elif event.type == pygame.MOUSEBUTTONDOWN and self.frozen():
             pass  # Clicks do nothing while paused, in help, the log or at the quit prompt
         elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -271,37 +306,46 @@ class App:
         game = self.game
         if key == pygame.K_ESCAPE:
             self.overlay = "quit"
-        elif key in (pygame.K_h, pygame.K_F1):
+        elif key == pygame.K_F1:
             self.overlay = "help"
-        elif key == pygame.K_l:
-            self.overlay = "log"
-        elif key == pygame.K_p:
-            self.paused = not self.paused
         elif key in ROLE_KEYS:
             game.selected = ROLE_KEYS[key]
             game.selected_unit = None
-        elif key == pygame.K_SPACE:
-            if not game.start_wave():
-                game.toggle_rush()
-        elif key == pygame.K_F5:
-            game.save(save_path(game.slot))
-        elif key == pygame.K_f:
-            self.speed_index = (self.speed_index + 1) % len(SPEEDS)
-        elif key == pygame.K_u:
-            game.upgrade()
-        elif key == pygame.K_g:
-            game.reinforce()
-        elif key == pygame.K_a:
-            game.choose_ultimate(0)
-        elif key == pygame.K_b:
-            game.choose_ultimate(1)
-        elif key == pygame.K_x:
-            game.sell()
-        elif key == pygame.K_c:
-            game.combine()
         elif key == pygame.K_r and game.status != "playing":
             self.game = None
             self.setup.update(self.title_state())
+        else:
+            action = action_for(key)  # The keys the player can change
+            if action is not None:
+                self._battle_action(action)
+
+    def _battle_action(self, action):
+        game = self.game
+        if action == "help":
+            self.overlay = "help"
+        elif action == "log":
+            self.overlay = "log"
+        elif action == "pause":
+            self.paused = not self.paused
+        elif action == "start":
+            if not game.start_wave():
+                game.toggle_rush()
+        elif action == "save":
+            game.save(save_path(game.slot))
+        elif action == "speed":
+            self.speed_index = (self.speed_index + 1) % len(SPEEDS)
+        elif action == "upgrade":
+            game.upgrade()
+        elif action == "reinforce":
+            game.reinforce()
+        elif action == "ultimate_a":
+            game.choose_ultimate(0)
+        elif action == "ultimate_b":
+            game.choose_ultimate(1)
+        elif action == "sell":
+            game.sell()
+        elif action == "combine":
+            game.combine()
 
     def _battle_click(self, event):
         point = to_canvas(event.pos, self.dest, SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -316,7 +360,26 @@ class App:
                 if cell is None:
                     self.game.deselect()
                 else:
+                    unit = self.game.unit_at(*cell)
                     self.game.click_cell(*cell)
+                    if unit is not None and not self.game.wave_active:  # Held down, it can be dragged to a new tile
+                        self._press, self._press_point, self._dragging = unit, point, False
+
+    def _drag_to(self, point):
+        """The pointer moved while a unit was pressed. A few pixels of movement count as a drag, not a click."""
+        if not self._dragging:
+            if math.hypot(point[0] - self._press_point[0], point[1] - self._press_point[1]) < 6:
+                return
+            self._dragging = True
+        self._drag_cell = self.camera.screen_to_tile(*point)
+
+    def _release(self, point):
+        """Let go of a pressed unit: a drag onto an empty tile moves it, and a click has already selected it."""
+        if self._dragging:
+            cell = self.camera.screen_to_tile(*point)
+            if cell is not None:
+                self.game.move_unit(self._press, *cell)
+        self._press, self._press_point, self._dragging, self._drag_cell = None, None, False, None
 
     # --- Simulation ---
 
@@ -353,12 +416,14 @@ class App:
             else:
                 draw_title(self.canvas, self.fonts, self.setup)
         else:
-            scene = draw_scene(self.camera, self.game, self.hover)
+            drag = (self._press, self._drag_cell) if self._dragging else None
+            scene = draw_scene(self.camera, self.game, self.hover, drag)
             pygame.transform.scale(scene, (SCREEN_WIDTH, SCREEN_HEIGHT), self.canvas)
             draw_hud(self.canvas, self.game, SPEEDS[self.speed_index], self.fonts, pointer,
-                     self.sounds.status_text())
+                     self.sounds.status_text(), camera=self.camera)
             if self.overlay == "help":
-                draw_help(self.canvas, self.fonts, self.help_tab)
+                self.help_max = draw_help(self.canvas, self.fonts, self.help_tab, self.help_scroll)
+                self.help_scroll = min(self.help_scroll, self.help_max)
             elif self.overlay == "log":
                 draw_log(self.canvas, self.fonts, self.game.story_log)
             elif self.paused:

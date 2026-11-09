@@ -1,0 +1,243 @@
+# Each combined unit has its own kit: an upgrade path, two ultimate forms, and its own look and sound.
+#
+# path       = two upgrades. The first is applied at level 2 and the second at level 3, on top of the level stats.
+# ultimates  = two ultimate forms, chosen at level 4 (A or B). They replace the role's ULTIMATES.
+# mods use the same keys as ULTIMATES (see config/combat.py).
+# sound      = how the shot sounds: tone = (start, end) pitch in Hz, length in seconds, decay (how fast it dies away),
+#              wobble = (rate in Hz, depth) for a wavering pitch, noise = how much hiss, pulses = how many rattles
+# trail      = the look of the shot in flight: sparks, smoke, ribbon, beads, embers or bolt
+# impact     = the flourish where the shot lands: ring, starburst, shards, bubbles, flash or nova
+# colour     = the colour of its shots
+# anim       = the unit's own animation: spin (a dot orbits its head), pulse (a ring beats on the ground),
+#              bob (it bobs as it stands), vent (steam rises from it) or pump (a heavy kick back on each shot)
+
+COMBO_KIT = {
+    "human": {
+        "breacher": {
+            "path": ({"name": "Hollow Points", "desc": "Hits 25% harder, blasts too", "mods": {"damage": 1.25, "splash_damage": 1.25}},
+                     {"name": "Frag Shell", "desc": "Blasts 25% wider, fires 10% faster", "mods": {"splash": 1.25, "rate": 1.1}}),
+            "ultimates": ({"name": "Breach Charge", "desc": "Blasts 1.6x wider, leaves fire 3 s", "mods": {"splash": 1.6, "burn": (8, 3.0, 1.0)}},
+                          {"name": "Storm Rounds", "desc": "Fires 1.5x as fast, pierces 1", "mods": {"rate": 1.5, "pierce": 1}}),
+            "sound": {"tone": (520, 260), "length": 0.14, "decay": 14, "wobble": (0, 0), "noise": 0.35, "pulses": 0},
+            "trail": "sparks", "impact": "starburst", "colour": (255, 190, 70), "anim": "pump"},
+        "sentinel": {
+            "path": ({"name": "Tracking Lens", "desc": "+1 range, 15% more damage", "mods": {"range": 1.0, "damage": 1.15}},
+                     {"name": "Overclock Sights", "desc": "Fires 20% faster", "mods": {"rate": 1.2}}),
+            "ultimates": ({"name": "Sky Watch", "desc": "Reach +3, fires 1.3x as fast", "mods": {"range": 3.0, "rate": 1.3}},
+                          {"name": "Hunter Sentinel", "desc": "Pierces 2, hits 1.5x harder", "mods": {"pierce": 2, "damage": 1.5}}),
+            "sound": {"tone": (1400, 900), "length": 0.12, "decay": 16, "wobble": (18, 0.2), "noise": 0.05, "pulses": 2},
+            "trail": "bolt", "impact": "flash", "colour": (90, 200, 255), "anim": "spin"},
+        "overwatch": {
+            "path": ({"name": "Spotter Relay", "desc": "Aura 0.5 tiles wider, 10% more damage", "mods": {"aura": (3.5, 1.25), "damage": 1.1}},
+                     {"name": "Lock-On Array", "desc": "Beam pierces 3, 20% more damage", "mods": {"pierce": 3, "damage": 1.2}}),
+            "ultimates": ({"name": "Kill Corridor", "desc": "Aura 4.5 tiles, slows what it hits", "mods": {"aura": (4.5, 1.3), "slow": (0.6, 2.0)}},
+                          {"name": "Long Watch", "desc": "Reach +3, pierces 4, 1.8x damage", "mods": {"range": 3.0, "damage": 1.8, "pierce": 4}}),
+            "sound": {"tone": (700, 700), "length": 0.35, "decay": 5, "wobble": (6, 0.3), "noise": 0.02, "pulses": 0},
+            "trail": "ribbon", "impact": "ring", "colour": (255, 110, 200), "anim": "pulse"},
+        "siege_gun": {
+            "path": ({"name": "Armour Bore", "desc": "35% more damage", "mods": {"damage": 1.35}},
+                     {"name": "Heavy Charge", "desc": "Blasts 1.3x wider, 20% harder", "mods": {"splash": 1.3, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Thunder Gun", "desc": "Blasts 1.5x wider, fires 1.4x as fast", "mods": {"splash": 1.5, "rate": 1.4}},
+                          {"name": "Overrun Shell", "desc": "Reach +4, leaves fire 3 s", "mods": {"range": 4.0, "burn": (10, 3.0, 1.2)}}),
+            "sound": {"tone": (160, 70), "length": 0.5, "decay": 6, "wobble": (0, 0), "noise": 0.4, "pulses": 0},
+            "trail": "smoke", "impact": "nova", "colour": (200, 170, 110), "anim": "pump"},
+        "flame_medic": {
+            "path": ({"name": "Triage Flame", "desc": "Aura 0.5 tiles wider, 15% faster fire", "mods": {"aura": (2.5, 1.3), "rate": 1.15}},
+                     {"name": "Field Burner", "desc": "Fire lasts 1 s longer", "mods": {"burn": (10, 4.0, 1.3)}}),
+            "ultimates": ({"name": "Sterile Blaze", "desc": "Aura 3.5 tiles, fires 1.5x as fast", "mods": {"aura": (3.5, 1.25), "rate": 1.5}},
+                          {"name": "Medic Inferno", "desc": "Hotter fire, pierces 2, reach +1", "mods": {"burn": (16, 3.0, 1.4), "pierce": 2, "range": 1.0}}),
+            "sound": {"tone": (900, 1300), "length": 0.3, "decay": 8, "wobble": (9, 0.4), "noise": 0.1, "pulses": 3},
+            "trail": "embers", "impact": "bubbles", "colour": (255, 240, 120), "anim": "vent"},
+        "napalm_crew": {
+            "path": ({"name": "Sticky Gel", "desc": "Fire from blasts lasts 4 s", "mods": {"burn": (9, 4.0, 1.3)}},
+                     {"name": "Oversized Tank", "desc": "Blasts 1.2x wider, 20% harder", "mods": {"splash": 1.2, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Firestorm", "desc": "Blasts and fire 1.5x as large", "mods": {"splash": 1.5, "burn": (12, 4.0, 1.5)}},
+                          {"name": "Flame Carpet", "desc": "Fires 1.7x as fast, fire 3 s", "mods": {"rate": 1.7, "burn": (10, 3.0, 1.2)}}),
+            "sound": {"tone": (260, 180), "length": 0.45, "decay": 6, "wobble": (0, 0), "noise": 0.6, "pulses": 0},
+            "trail": "embers", "impact": "nova", "colour": (255, 96, 40), "anim": "vent"},
+        "bombardier": {
+            "path": ({"name": "Cluster Racks", "desc": "Fires 1.2x as fast", "mods": {"rate": 1.2}},
+                     {"name": "Napalm Fill", "desc": "Clouds burn 1.3x harder", "mods": {"burn": (9.0, 4.0, 1.4)}}),
+            "ultimates": ({"name": "Carpet Bombing", "desc": "Blasts 1.6x wider, 1.3x as fast", "mods": {"splash": 1.6, "rate": 1.3}},
+                          {"name": "Precision Drop", "desc": "Hits 2x harder, reach +2", "mods": {"splash_damage": 2.0, "range": 2.0}}),
+            "sound": {"tone": (220, 120), "length": 0.4, "decay": 7, "wobble": (0, 0), "noise": 0.3, "pulses": 1},
+            "trail": "smoke", "impact": "shards", "colour": (150, 255, 170), "anim": "bob"},
+        "incendiary": {
+            "path": ({"name": "Thermite Load", "desc": "Flames 30% hotter", "mods": {"damage": 1.3}},
+                     {"name": "Long Burn", "desc": "Fire lasts 2 s longer", "mods": {"burn": (8.0, 6.0, 1.2)}}),
+            "ultimates": ({"name": "Phosphor Rain", "desc": "Fires 1.8x as fast, fire 3 s", "mods": {"rate": 1.8, "burn": (9.0, 3.0, 1.2)}},
+                          {"name": "Torch Lance", "desc": "Flames pierce 4, reach +2", "mods": {"pierce": 4, "range": 2.0}}),
+            "sound": {"tone": (1100, 500), "length": 0.22, "decay": 10, "wobble": (30, 0.15), "noise": 0.5, "pulses": 0},
+            "trail": "sparks", "impact": "shards", "colour": (255, 140, 40), "anim": "spin"},
+        "stalker": {
+            "path": ({"name": "Night Scope", "desc": "Reach +1.5, 15% more damage", "mods": {"range": 1.5, "damage": 1.15}},
+                     {"name": "Gas Canister", "desc": "Blasts 1.3x wider, short burn", "mods": {"splash": 1.3, "burn": (6.0, 3.0, 1.1)}}),
+            "ultimates": ({"name": "Ghost Round", "desc": "Slows what it hits 60% for 3 s", "mods": {"slow": (0.4, 3.0), "damage": 1.2}},
+                          {"name": "Kill Shot", "desc": "Huge hits, pierce 3, reach +2", "mods": {"damage": 2.2, "pierce": 3, "range": 2.0}}),
+            "sound": {"tone": (1000, 480), "length": 0.18, "decay": 12, "wobble": (0, 0), "noise": 0.15, "pulses": 0},
+            "trail": "bolt", "impact": "flash", "colour": (90, 255, 200), "anim": "pulse"},
+        "iron_walker": {
+            "path": ({"name": "Plate Armour", "desc": "25% more damage, +0.5 range", "mods": {"damage": 1.25, "range": 0.5}},
+                     {"name": "Piston Drive", "desc": "Fires 25% faster", "mods": {"rate": 1.25}}),
+            "ultimates": ({"name": "Juggernaut", "desc": "Aura 3.5 tiles, blasts 1.5x wider", "mods": {"aura": (3.5, 1.25), "splash": 1.5}},
+                          {"name": "Cannon Walker", "desc": "Double damage, pierces 1", "mods": {"damage": 2.0, "pierce": 1}}),
+            "sound": {"tone": (120, 90), "length": 0.3, "decay": 9, "wobble": (0, 0), "noise": 0.5, "pulses": 4},
+            "trail": "sparks", "impact": "ring", "colour": (200, 210, 230), "anim": "bob"},
+        "sky_battery": {
+            "path": ({"name": "Radar Feed", "desc": "Reach +1.5, 20% faster fire", "mods": {"range": 1.5, "rate": 1.2}},
+                     {"name": "Flak Cluster", "desc": "Blasts 1.3x wider", "mods": {"splash": 1.3}}),
+            "ultimates": ({"name": "Air Umbrella", "desc": "Reach +3, fires 1.5x as fast", "mods": {"range": 3.0, "rate": 1.5}},
+                          {"name": "Sky Fortress", "desc": "Blasts 1.6x wider, 2x damage", "mods": {"splash": 1.6, "damage": 2.0}}),
+            "sound": {"tone": (1200, 1800), "length": 0.25, "decay": 10, "wobble": (3, 0.2), "noise": 0.1, "pulses": 0},
+            "trail": "beads", "impact": "bubbles", "colour": (170, 140, 255), "anim": "spin"},
+        "command_tank": {
+            "path": ({"name": "Commander's Net", "desc": "Aura 3.5 tiles", "mods": {"aura": (3.5, 1.35)}},
+                     {"name": "Heavy Treads", "desc": "30% more damage, hotter fire", "mods": {"damage": 1.3, "burn": (10, 3.0, 1.3)}}),
+            "ultimates": ({"name": "Rally Point", "desc": "Aura 4.5 tiles, +50% fire rate", "mods": {"aura": (4.5, 1.5)}},
+                          {"name": "Siege Mode", "desc": "Pierces 3, reach +2, 1.4x damage", "mods": {"pierce": 3, "range": 2.0, "damage": 1.4}}),
+            "sound": {"tone": (180, 140), "length": 0.35, "decay": 6, "wobble": (0, 0), "noise": 0.3, "pulses": 2},
+            "trail": "smoke", "impact": "ring", "colour": (240, 200, 80), "anim": "pump"},
+        "shock_squad": {
+            "path": ({"name": "Shock Gloves", "desc": "Rifles fire 20% faster", "mods": {"rate": 1.2}},
+                     {"name": "Live Wire", "desc": "Blasts slow what they catch", "mods": {"slow": (0.6, 1.5)}}),
+            "ultimates": ({"name": "Arc Fire", "desc": "Blasts 1.4x wider, fires 1.3x as fast", "mods": {"splash": 1.4, "rate": 1.3}},
+                          {"name": "Electric Blitz", "desc": "Double damage, slows 50%", "mods": {"damage": 2.0, "slow": (0.5, 2.0)}}),
+            "sound": {"tone": (600, 300), "length": 0.15, "decay": 12, "wobble": (40, 0.5), "noise": 0.2, "pulses": 4},
+            "trail": "bolt", "impact": "nova", "colour": (220, 240, 255), "anim": "pulse"},
+        "rocket_battery": {
+            "path": ({"name": "Launch Rails", "desc": "Reach +1, fires 20% faster", "mods": {"range": 1.0, "rate": 1.2}},
+                     {"name": "Warhead Pack", "desc": "Blasts 1.3x wider, 20% harder", "mods": {"splash": 1.3, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Salvo", "desc": "Fires 2x as fast, cloud lingers 6 s", "mods": {"rate": 2.0, "burn": (6.0, 6.0, 1.3)}},
+                          {"name": "Heavy Salvo", "desc": "Blasts 1.8x wider, 1.6x harder", "mods": {"splash": 1.8, "splash_damage": 1.6}}),
+            "sound": {"tone": (300, 140), "length": 0.45, "decay": 5, "wobble": (0, 0), "noise": 0.5, "pulses": 0},
+            "trail": "smoke", "impact": "shards", "colour": (180, 180, 190), "anim": "vent"},
+        "field_launcher": {
+            "path": ({"name": "Field Kit", "desc": "Aura 0.5 tiles wider", "mods": {"aura": (3.0, 1.2)}},
+                     {"name": "Drone Spotter", "desc": "+1.5 range, 15% more damage", "mods": {"range": 1.5, "damage": 1.15}}),
+            "ultimates": ({"name": "Relief Barrage", "desc": "Aura 3.5 tiles, fires 1.4x as fast", "mods": {"aura": (3.5, 1.25), "rate": 1.4}},
+                          {"name": "Cloud Maker", "desc": "Clouds 1.6x wider, linger 8 s", "mods": {"burn": (7.0, 8.0, 1.6)}}),
+            "sound": {"tone": (480, 640), "length": 0.22, "decay": 11, "wobble": (5, 0.2), "noise": 0.1, "pulses": 1},
+            "trail": "beads", "impact": "bubbles", "colour": (200, 255, 200), "anim": "bob"},
+        "bastion": {
+            "path": ({"name": "Bulwark", "desc": "Aura 0.5 tiles wider, 20% more damage", "mods": {"aura": (4.0, 1.3), "damage": 1.2}},
+                     {"name": "Full Battery", "desc": "Fires 25% faster, blasts 1.2x", "mods": {"rate": 1.25, "splash": 1.2}}),
+            "ultimates": ({"name": "Fortress Cannon", "desc": "Blasts 2x wider, pierces 3", "mods": {"splash": 2.0, "pierce": 3}},
+                          {"name": "Command Grid", "desc": "Aura 5 tiles, fires 1.5x as fast", "mods": {"aura": (5.0, 1.5), "rate": 1.5}}),
+            "sound": {"tone": (200, 400), "length": 0.6, "decay": 4, "wobble": (2, 0.5), "noise": 0.25, "pulses": 2},
+            "trail": "ribbon", "impact": "nova", "colour": (255, 215, 250), "anim": "spin"},
+    },
+    "zombie": {
+        "gutbuster": {
+            "path": ({"name": "Thick Hide", "desc": "25% more damage, +0.5 range", "mods": {"damage": 1.25, "range": 0.5}},
+                     {"name": "Bloated Sacs", "desc": "Bursts 25% harder", "mods": {"splash_damage": 1.25}}),
+            "ultimates": ({"name": "Burst Gut", "desc": "Blasts 1.6x wider, acid 3 s", "mods": {"splash": 1.6, "burn": (8, 3.0, 1.0)}},
+                          {"name": "Spit Barrage", "desc": "Fires 1.5x as fast, pierces 1", "mods": {"rate": 1.5, "pierce": 1}}),
+            "sound": {"tone": (480, 200), "length": 0.16, "decay": 12, "wobble": (0, 0), "noise": 0.4, "pulses": 0},
+            "trail": "smoke", "impact": "bubbles", "colour": (120, 200, 60), "anim": "pump"},
+        "rot_sentinel": {
+            "path": ({"name": "Keen Eyes", "desc": "+1 range, 15% more damage", "mods": {"range": 1.0, "damage": 1.15}},
+                     {"name": "Quick Reflex", "desc": "Fires 20% faster", "mods": {"rate": 1.2}}),
+            "ultimates": ({"name": "Watcher", "desc": "Reach +3, fires 1.3x as fast", "mods": {"range": 3.0, "rate": 1.3}},
+                          {"name": "Spine Hunter", "desc": "Pierces 2, 1.5x damage", "mods": {"pierce": 2, "damage": 1.5}}),
+            "sound": {"tone": (1300, 800), "length": 0.14, "decay": 15, "wobble": (22, 0.25), "noise": 0.1, "pulses": 2},
+            "trail": "bolt", "impact": "flash", "colour": (190, 80, 220), "anim": "spin"},
+        "death_shroud": {
+            "path": ({"name": "Gloom Veil", "desc": "Aura 3.5 tiles, 10% more damage", "mods": {"aura": (3.5, 1.25), "damage": 1.1}},
+                     {"name": "Grave Chill", "desc": "Shots hit 20% harder", "mods": {"damage": 1.2}}),
+            "ultimates": ({"name": "Death Dirge", "desc": "Aura 4.5 tiles, slows what it hits", "mods": {"aura": (4.5, 1.3), "slow": (0.6, 2.0)}},
+                          {"name": "Reaper Lance", "desc": "Reach +3, huge hits, pierces 4", "mods": {"range": 3.0, "damage": 1.8, "pierce": 4}}),
+            "sound": {"tone": (640, 640), "length": 0.4, "decay": 4, "wobble": (5, 0.35), "noise": 0.05, "pulses": 0},
+            "trail": "ribbon", "impact": "ring", "colour": (110, 60, 140), "anim": "pulse"},
+        "bloat_siege": {
+            "path": ({"name": "Dense Core", "desc": "35% more damage", "mods": {"damage": 1.35}},
+                     {"name": "Swollen Pod", "desc": "Blasts 1.3x wider, 20% harder", "mods": {"splash": 1.3, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Rupture", "desc": "Blasts 1.5x wider, fires 1.4x as fast", "mods": {"splash": 1.5, "rate": 1.4}},
+                          {"name": "Spore Bomb", "desc": "Reach +4, acid 3 s", "mods": {"range": 4.0, "burn": (10, 3.0, 1.2)}}),
+            "sound": {"tone": (170, 60), "length": 0.55, "decay": 6, "wobble": (7, 0.3), "noise": 0.35, "pulses": 0},
+            "trail": "smoke", "impact": "nova", "colour": (150, 220, 90), "anim": "vent"},
+        "bile_shaman": {
+            "path": ({"name": "Chant Bloom", "desc": "Aura 0.5 tiles wider, 15% faster fire", "mods": {"aura": (2.5, 1.3), "rate": 1.15}},
+                     {"name": "Sour Spray", "desc": "Acid lasts 1 s longer", "mods": {"burn": (10, 4.0, 1.3)}}),
+            "ultimates": ({"name": "Rot Hymn", "desc": "Aura 3.5 tiles, 1.5x fire rate", "mods": {"aura": (3.5, 1.25), "rate": 1.5}},
+                          {"name": "Bile Storm", "desc": "Acid hotter, pierces 2, reach +1", "mods": {"burn": (16, 3.0, 1.4), "pierce": 2, "range": 1.0}}),
+            "sound": {"tone": (150, 170), "length": 0.7, "decay": 3, "wobble": (5.5, 0.12), "noise": 0.05, "pulses": 0},
+            "trail": "embers", "impact": "bubbles", "colour": (230, 255, 110), "anim": "vent"},
+        "toxic_crew": {
+            "path": ({"name": "Sticky Venom", "desc": "Acid from blasts lasts 4 s", "mods": {"burn": (9, 4.0, 1.3)}},
+                     {"name": "Swelling Sac", "desc": "Blasts 1.2x wider, 20% harder", "mods": {"splash": 1.2, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Plague Burst", "desc": "Blasts and acid 1.5x as large", "mods": {"splash": 1.5, "burn": (12, 4.0, 1.5)}},
+                          {"name": "Acid Carpet", "desc": "Fires 1.7x as fast, acid 3 s", "mods": {"rate": 1.7, "burn": (10, 3.0, 1.2)}}),
+            "sound": {"tone": (240, 150), "length": 0.45, "decay": 6, "wobble": (0, 0), "noise": 0.6, "pulses": 0},
+            "trail": "embers", "impact": "nova", "colour": (96, 210, 60), "anim": "vent"},
+        "abomination": {
+            "path": ({"name": "Armoured Hide", "desc": "25% more damage, +0.5 range", "mods": {"damage": 1.25, "range": 0.5}},
+                     {"name": "Frenzied Limbs", "desc": "Fires 25% faster", "mods": {"rate": 1.25}}),
+            "ultimates": ({"name": "Mother Swarm", "desc": "Aura 3.5 tiles, blasts 1.5x wider", "mods": {"aura": (3.5, 1.25), "splash": 1.5}},
+                          {"name": "Twin Maw", "desc": "Double damage, pierces 1", "mods": {"damage": 2.0, "pierce": 1}}),
+            "sound": {"tone": (110, 80), "length": 0.32, "decay": 8, "wobble": (3, 0.3), "noise": 0.45, "pulses": 4},
+            "trail": "sparks", "impact": "shards", "colour": (120, 110, 60), "anim": "bob"},
+        "spore_tower": {
+            "path": ({"name": "Spore Antenna", "desc": "+1.5 range, 20% faster fire", "mods": {"range": 1.5, "rate": 1.2}},
+                     {"name": "Puff Cluster", "desc": "Blasts 1.3x wider", "mods": {"splash": 1.3}}),
+            "ultimates": ({"name": "Spore Umbrella", "desc": "Reach +3, fires 1.5x as fast", "mods": {"range": 3.0, "rate": 1.5}},
+                          {"name": "Spore Keep", "desc": "Blasts 1.6x wider, 2x damage", "mods": {"splash": 1.6, "damage": 2.0}}),
+            "sound": {"tone": (1000, 1500), "length": 0.28, "decay": 9, "wobble": (3, 0.25), "noise": 0.12, "pulses": 0},
+            "trail": "beads", "impact": "bubbles", "colour": (140, 230, 200), "anim": "spin"},
+        "plague_engine": {
+            "path": ({"name": "Rot Net", "desc": "Aura 3.5 tiles", "mods": {"aura": (3.5, 1.35)}},
+                     {"name": "Thick Ichor", "desc": "30% more damage, hotter acid", "mods": {"damage": 1.3, "burn": (10, 3.0, 1.3)}}),
+            "ultimates": ({"name": "Pestilence", "desc": "Aura 4.5 tiles, +50% fire rate", "mods": {"aura": (4.5, 1.5)}},
+                          {"name": "Blight Lance", "desc": "Reach +2, pierces 3, 1.4x damage", "mods": {"pierce": 3, "range": 2.0, "damage": 1.4}}),
+            "sound": {"tone": (190, 110), "length": 0.5, "decay": 5, "wobble": (2.5, 0.4), "noise": 0.3, "pulses": 2},
+            "trail": "smoke", "impact": "ring", "colour": (170, 230, 120), "anim": "pump"},
+        "spore_bombardier": {
+            "path": ({"name": "Pod Racks", "desc": "Fires 20% faster", "mods": {"rate": 1.2}},
+                     {"name": "Caustic Fill", "desc": "Clouds burn 1.3x harder", "mods": {"burn": (9.0, 4.0, 1.4)}}),
+            "ultimates": ({"name": "Carpet Spores", "desc": "Blasts 1.6x wider, 1.3x as fast", "mods": {"splash": 1.6, "rate": 1.3}},
+                          {"name": "Precision Pod", "desc": "Hits 2x harder, reach +2", "mods": {"splash_damage": 2.0, "range": 2.0}}),
+            "sound": {"tone": (230, 130), "length": 0.4, "decay": 7, "wobble": (0, 0), "noise": 0.3, "pulses": 1},
+            "trail": "smoke", "impact": "shards", "colour": (60, 140, 90), "anim": "bob"},
+        "bile_launcher": {
+            "path": ({"name": "Bile Load", "desc": "Acid 30% hotter", "mods": {"damage": 1.3}},
+                     {"name": "Long Sting", "desc": "Acid lasts 2 s longer", "mods": {"burn": (8.0, 6.0, 1.2)}}),
+            "ultimates": ({"name": "Venom Rain", "desc": "Fires 1.8x as fast, acid 3 s", "mods": {"rate": 1.8, "burn": (9.0, 3.0, 1.2)}},
+                          {"name": "Spine Lash", "desc": "Lashes pierce 4, reach +2", "mods": {"pierce": 4, "range": 2.0}}),
+            "sound": {"tone": (1000, 400), "length": 0.24, "decay": 9, "wobble": (28, 0.2), "noise": 0.45, "pulses": 0},
+            "trail": "sparks", "impact": "starburst", "colour": (255, 80, 160), "anim": "spin"},
+        "venom_spine": {
+            "path": ({"name": "Keen Barbs", "desc": "Reach +1.5, 15% more damage", "mods": {"range": 1.5, "damage": 1.15}},
+                     {"name": "Barbed Sac", "desc": "Blasts 1.3x wider, short acid", "mods": {"splash": 1.3, "burn": (6.0, 3.0, 1.1)}}),
+            "ultimates": ({"name": "Numbing Spine", "desc": "Slows what it hits 60% for 3 s", "mods": {"slow": (0.4, 3.0), "damage": 1.2}},
+                          {"name": "Impaler", "desc": "Huge hits, pierces 3, reach +2", "mods": {"damage": 2.2, "pierce": 3, "range": 2.0}}),
+            "sound": {"tone": (900, 420), "length": 0.2, "decay": 13, "wobble": (0, 0), "noise": 0.15, "pulses": 0},
+            "trail": "bolt", "impact": "flash", "colour": (200, 255, 90), "anim": "pulse"},
+        "toxic_bloom": {
+            "path": ({"name": "Spreading Petals", "desc": "Spit fires 20% faster", "mods": {"rate": 1.2}},
+                     {"name": "Acid Pollen", "desc": "Blasts slow what they catch", "mods": {"slow": (0.6, 1.5)}}),
+            "ultimates": ({"name": "Bloom Burst", "desc": "Blasts 1.4x wider, 1.3x as fast", "mods": {"splash": 1.4, "rate": 1.3}},
+                          {"name": "Venom Flood", "desc": "Double damage, slows 50%", "mods": {"damage": 2.0, "slow": (0.5, 2.0)}}),
+            "sound": {"tone": (360, 200), "length": 0.2, "decay": 11, "wobble": (30, 0.45), "noise": 0.25, "pulses": 3},
+            "trail": "beads", "impact": "starburst", "colour": (230, 120, 200), "anim": "spin"},
+        "rocket_hive": {
+            "path": ({"name": "Seed Racks", "desc": "Reach +1, 20% faster fire", "mods": {"range": 1.0, "rate": 1.2}},
+                     {"name": "Hardened Pods", "desc": "Blasts 1.3x wider, 20% harder", "mods": {"splash": 1.3, "splash_damage": 1.2}}),
+            "ultimates": ({"name": "Seed Salvo", "desc": "Fires 2x as fast, cloud lingers 6 s", "mods": {"rate": 2.0, "burn": (6.0, 6.0, 1.3)}},
+                          {"name": "Hive Cannon", "desc": "Blasts 1.8x wider, 1.6x harder", "mods": {"splash": 1.8, "splash_damage": 1.6}}),
+            "sound": {"tone": (330, 120), "length": 0.5, "decay": 4, "wobble": (0, 0), "noise": 0.5, "pulses": 0},
+            "trail": "smoke", "impact": "nova", "colour": (120, 90, 40), "anim": "vent"},
+        "spore_crier": {
+            "path": ({"name": "Lung Sac", "desc": "Aura 0.5 tiles wider", "mods": {"aura": (3.0, 1.2)}},
+                     {"name": "Drifting Spores", "desc": "+1.5 range, 15% more damage", "mods": {"range": 1.5, "damage": 1.15}}),
+            "ultimates": ({"name": "Rallying Cry", "desc": "Aura 3.5 tiles, 1.4x fire rate", "mods": {"aura": (3.5, 1.25), "rate": 1.4}},
+                          {"name": "Choking Cloud", "desc": "Clouds 1.6x wider, linger 8 s", "mods": {"burn": (7.0, 8.0, 1.6)}}),
+            "sound": {"tone": (420, 620), "length": 0.3, "decay": 6, "wobble": (4, 0.3), "noise": 0.2, "pulses": 1},
+            "trail": "beads", "impact": "bubbles", "colour": (210, 170, 230), "anim": "vent"},
+        "hive_colossus": {
+            "path": ({"name": "Thick Carapace", "desc": "Aura 0.5 tiles wider, 20% more damage", "mods": {"aura": (4.0, 1.3), "damage": 1.2}},
+                     {"name": "Second Heart", "desc": "Fires 25% faster, blasts 1.2x", "mods": {"rate": 1.25, "splash": 1.2}}),
+            "ultimates": ({"name": "Titan Maw", "desc": "Blasts 2x wider, pierces 3", "mods": {"splash": 2.0, "pierce": 3}},
+                          {"name": "Hive Mind", "desc": "Aura 5 tiles, fires 1.5x as fast", "mods": {"aura": (5.0, 1.5), "rate": 1.5}}),
+            "sound": {"tone": (150, 300), "length": 0.65, "decay": 3, "wobble": (2, 0.5), "noise": 0.3, "pulses": 2},
+            "trail": "ribbon", "impact": "nova", "colour": (255, 230, 150), "anim": "spin"},
+    },
+}

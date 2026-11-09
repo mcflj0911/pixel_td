@@ -110,13 +110,13 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(game.gold, START_GOLD - cost)
         self.assertIsNone(game.place(5, 0))
         self.assertEqual(game.gold, START_GOLD - cost)
-        self.assertEqual(game.message, "Can't build there")
+        self.assertEqual(game.message, "A unit is already there. Click it to select it")
 
     def test_cannot_afford_unit(self):
         game = Game("zombie")
         game.gold = 10
         self.assertIsNone(game.place(5, 0))
-        self.assertEqual(game.message, f"Need {UNIT_TYPES['zombie']['rapid']['cost']} gold")
+        self.assertEqual(game.message, f"Need {UNIT_TYPES['zombie']['rapid']['cost']} gold for a Spitter, you have 10")
 
     def test_every_role_can_be_built(self):
         game = Game("human")
